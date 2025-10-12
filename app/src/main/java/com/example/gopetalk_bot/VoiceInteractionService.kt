@@ -31,7 +31,6 @@ class VoiceInteractionService : Service() {
     private var webSocket: WebSocket? = null
     private val client by lazy { OkHttpClient() }
 
-    private var isListening = false
     private var hotwordDetected = false
 
     companion object {
@@ -81,7 +80,6 @@ class VoiceInteractionService : Service() {
         speechRecognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 Log.d(TAG, "onReadyForSpeech")
-                isListening = true
             }
 
             override fun onResults(results: Bundle?) {
@@ -92,7 +90,6 @@ class VoiceInteractionService : Service() {
                     handleSpeechResult(text)
                 }
                 // Reiniciar la escucha
-                hotwordDetected = false
                 startListening()
             }
 
@@ -107,20 +104,26 @@ class VoiceInteractionService : Service() {
             }
 
             override fun onError(error: Int) {
+                // No reiniciar la escucha si el error es 'ERROR_CLIENT',
+                // ya que es el resultado de llamar a speechRecognizer.cancel()
+                if (error == SpeechRecognizer.ERROR_CLIENT) {
+                    Log.d(TAG, "onError: ERROR_CLIENT - expected after cancel()")
+                    return // No hacer nada, startListening() se encargará de reiniciar
+                }
+                
                 val errorMessage = when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH -> "No match"
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Speech timeout"
                     else -> "Recognizer error $error"
                 }
-                Log.e(TAG, "onError: $errorMessage")
-                // En caso de error, reiniciar la escucha
-                hotwordDetected = false
+                Log.e(TAG, "onError: $errorMessage, restarting listening.")
+                
+                // Reiniciar la escucha en otros errores
                 startListening()
             }
 
             override fun onEndOfSpeech() {
                 Log.d(TAG, "onEndOfSpeech")
-                isListening = false
             }
             // Ignorar otros métodos por brevedad
             override fun onBeginningOfSpeech() {}
@@ -142,14 +145,26 @@ class VoiceInteractionService : Service() {
 
 
     private fun startListening() {
-        if (!isListening && ::speechRecognizer.isInitialized) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        // Cancelar cualquier escucha anterior para evitar el error "recognizer busy"
+        if (::speechRecognizer.isInitialized) {
+            speechRecognizer.cancel()
+        }
+        
+        // Iniciar la escucha en el hilo principal
+        Handler(Looper.getMainLooper()).post {
+            if (::speechRecognizer.isInitialized) {
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                }
+                try {
+                    speechRecognizer.startListening(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error starting listening: ${e.message}")
+                }
             }
-            speechRecognizer.startListening(intent)
         }
     }
 
