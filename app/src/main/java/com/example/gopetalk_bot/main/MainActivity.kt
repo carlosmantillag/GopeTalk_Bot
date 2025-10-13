@@ -1,6 +1,5 @@
-package com.example.gopetalk_bot
+package com.example.gopetalk_bot.main
 
-import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -32,67 +31,61 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.gopetalk_bot.main.MainContract
+import com.example.gopetalk_bot.main.MainPresenter
+import com.example.gopetalk_bot.voiceinteraction.VoiceInteractionService
 import com.example.gopetalk_bot.ui.theme.GopeTalk_BotTheme
 import kotlin.random.Random
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), MainContract.View {
 
-    private val permissionsToRequest by lazy {
-        mutableListOf(
-            Manifest.permission.RECORD_AUDIO
-        ).apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-    }
+    private lateinit var presenter: MainContract.Presenter
 
     private val requestMultiplePermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allPermissionsGranted = permissions.entries.all { it.value }
-
-        if (allPermissionsGranted) {
-            startVoiceService()
-        } else {
-            Toast.makeText(this, "Todos los permisos son necesarios para que la app funcione.", Toast.LENGTH_LONG).show()
-        }
+        presenter.onPermissionsResult(permissions.entries.all { it.value })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (areAllPermissionsGranted()) {
-            startVoiceService()
-        } else {
-            requestMultiplePermissionsLauncher.launch(permissionsToRequest.toTypedArray())
-        }
+        presenter = MainPresenter(this)
+        presenter.onViewCreated()
 
         setContent {
             GopeTalk_BotTheme { // Wrap with your app's theme
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Surface(modifier = Modifier.Companion.fillMaxSize()) {
                     Box(
-                        modifier = Modifier
+                        modifier = Modifier.Companion
                             .fillMaxSize()
                             .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(Color(0xFF6A1B9A), Color(0xFF1976D2)) // Purple to Blue
+                                brush = Brush.Companion.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF6A1B9A),
+                                        Color(0xFF1976D2)
+                                    ) // Purple to Blue
                                 )
                             ),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Companion.Center
                     ) {
                         // Floating particles from bottom to top
                         repeat(50) { index ->
-                            val infiniteTransition = rememberInfiniteTransition(label = "particle_animation_" + index)
+                            val infiniteTransition =
+                                rememberInfiniteTransition(label = "particle_animation_" + index)
 
-                            val initialX = remember { (Random.nextFloat() - 0.5f) * 400 } // horizontal range
-                            val duration = remember { Random.nextInt(4000, 10000) }
+                            val initialX =
+                                remember { (Random.Default.nextFloat() - 0.5f) * 400 } // horizontal range
+                            val duration = remember { Random.Default.nextInt(4000, 10000) }
 
                             val animatedAlpha by infiniteTransition.animateFloat(
                                 initialValue = 0.1f,
                                 targetValue = 0.7f,
                                 animationSpec = infiniteRepeatable(
-                                    animation = tween(durationMillis = duration / 2, easing = LinearEasing),
+                                    animation = tween(
+                                        durationMillis = duration / 2,
+                                        easing = LinearEasing
+                                    ),
                                     repeatMode = RepeatMode.Reverse
                                 ), label = "particle_alpha_" + index
                             )
@@ -107,15 +100,16 @@ class MainActivity : ComponentActivity() {
                             )
 
                             Box(
-                                modifier = Modifier
+                                modifier = Modifier.Companion
                                     .offset(x = initialX.dp, y = animatedY.dp)
                                     .size(2.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = animatedAlpha))
+                                    .background(Color.Companion.White.copy(alpha = animatedAlpha))
                             )
                         }
 
-                        val infiniteTransition = rememberInfiniteTransition(label = "sphere_rotation")
+                        val infiniteTransition =
+                            rememberInfiniteTransition(label = "sphere_rotation")
                         val rotation by infiniteTransition.animateFloat(
                             initialValue = 0f,
                             targetValue = 360f,
@@ -126,10 +120,10 @@ class MainActivity : ComponentActivity() {
                         )
 
                         Box(
-                            modifier = Modifier
+                            modifier = Modifier.Companion
                                 .size(200.dp) // Placeholder size for the sphere
                                 .clip(CircleShape)
-                                .background(Color.Black)
+                                .background(Color.Companion.Black)
                                 .graphicsLayer {
                                     rotationZ = rotation
                                 }
@@ -140,13 +134,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun areAllPermissionsGranted(): Boolean {
-        return permissionsToRequest.all {
+    override fun areAllPermissionsGranted(): Boolean {
+        return (presenter as MainPresenter).permissionsToRequest.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 
-    private fun startVoiceService() {
+    override fun requestPermissions() {
+        requestMultiplePermissionsLauncher.launch((presenter as MainPresenter).permissionsToRequest)
+    }
+
+    override fun showPermissionsRequiredError() {
+        Toast.makeText(this, "Todos los permisos son necesarios para que la app funcione.", Toast.LENGTH_LONG).show()
+    }
+
+    override fun startVoiceService() {
         val intent = Intent(this, VoiceInteractionService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
