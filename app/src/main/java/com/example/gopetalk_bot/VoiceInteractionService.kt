@@ -169,17 +169,15 @@ class VoiceInteractionService : Service() {
     }
 
     private fun connectWebSocket() {
-        val apiKey = BuildConfig.WEBSOCKET_API_KEY
-        
-        // Crear la request con o sin autenticación según la configuración
-        val requestBuilder = Request.Builder().url(WEBSOCKET_URL)
-        
-        // Solo agregar el header de Authorization si la clave API no es el placeholder
-        if (apiKey != "159.223.150.185" && apiKey.isNotEmpty()) {
-            requestBuilder.addHeader("Authorization", "Bearer $apiKey")
-        }
-        
-        val request = requestBuilder.build()
+        // --- SIMULACIÓN DE TOKEN ---
+        // En una app real, este token vendría de un login exitoso o estaria guardado.
+        val simulatedToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFuYUBleGFtcGxlLmNvbSIsImV4cCI6MTc2MDM2ODEzOSwidXNlcl9pZCI6MTM5fQ.OSpsaVW50djENX2KdMVpfB5ZRlWJCUDBluoxGJJZYn0"
+
+        val request = Request.Builder()
+            .url(WEBSOCKET_URL)
+            .addHeader("Authorization", "Bearer $simulatedToken")
+            .build()
+
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.i(TAG, "WebSocket connection opened.")

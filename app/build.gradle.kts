@@ -16,8 +16,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        
-        buildConfigField("String", "WEBSOCKET_API_KEY", "\"159.223.150.185\"")
     }
 
     buildTypes {
