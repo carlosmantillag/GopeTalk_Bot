@@ -1,21 +1,18 @@
 package com.example.gopetalk_bot.voiceinteraction
 
-import java.io.File
+import android.content.Context
 
 interface VoiceInteractionContract {
     interface View {
-        fun speak(text: String)
-        fun startCommandRecording()
-        fun stopCommandRecording(): File?
+        val context: Context
+        fun speak(text: String, utteranceId: String)
         fun logInfo(message: String)
         fun logError(message: String, t: Throwable? = null)
     }
 
     interface Presenter {
-        fun start()
+        fun start(ttsManager: TextToSpeechManager)
         fun stop()
         fun onHotwordDetected()
-        fun onSpeechEnded()
-        fun onCommandAudioAvailable(audioFile: File)
     }
 }

@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Handler
+import android.os.Looper
 import com.example.gopetalk_bot.main.AudioRmsMonitor
 import java.io.File
 import java.io.FileOutputStream
@@ -17,6 +19,7 @@ import kotlin.math.sqrt
 
 class AudioRecordingManager(
     private val context: Context,
+    private val onRecordingStopped: (File) -> Unit,
     private val logInfo: (String) -> Unit,
     private val logError: (String, Throwable?) -> Unit
 ) {
@@ -52,6 +55,15 @@ class AudioRecordingManager(
             recordingThread = thread {
                 writeAudioDataToFile()
             }
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (isRecording) {
+                    val audioFile = stopCommandRecording()
+                    if (audioFile != null) {
+                        onRecordingStopped(audioFile)
+                    }
+                }
+            }, 5000)
         } catch (e: SecurityException) {
             logError("Audio recording permission not granted.", e)
         }

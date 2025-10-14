@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -15,9 +16,10 @@ import java.io.File
 class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
     private lateinit var presenter: VoiceInteractionContract.Presenter
-    private lateinit var audioRecordingManager: AudioRecordingManager
     private lateinit var textToSpeechManager: TextToSpeechManager
 
+    override val context: Context
+        get() = this
 
     companion object {
         private const val TAG = "VoiceInteractionService"
@@ -31,10 +33,8 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         setupNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
 
-        audioRecordingManager = AudioRecordingManager(this, ::logInfo, ::logError)
         textToSpeechManager = TextToSpeechManager(this) { error -> logError(error, null) }
-
-        presenter.start()
+        presenter.start(textToSpeechManager)
         presenter.onHotwordDetected()
     }
 
@@ -42,16 +42,8 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         return START_STICKY
     }
 
-    override fun startCommandRecording() {
-        audioRecordingManager.startCommandRecording()
-    }
-
-    override fun stopCommandRecording(): File? {
-        return audioRecordingManager.stopCommandRecording()
-    }
-
-    override fun speak(text: String) {
-        textToSpeechManager.speak(text)
+    override fun speak(text: String, utteranceId: String) {
+        textToSpeechManager.speak(text, utteranceId)
     }
 
     override fun logInfo(message: String) {
@@ -75,15 +67,13 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
     private fun createNotification(): Notification = NotificationCompat.Builder(this, CHANNEL_ID)
         .setContentTitle("GopeTalk Bot Activo")
-        .setContentText("Grabando audio...")
+        .setContentText("Escuchando...")
         .setSmallIcon(R.mipmap.ic_launcher)
         .build()
 
     override fun onDestroy() {
         super.onDestroy()
-        presenter.onSpeechEnded()
         presenter.stop()
-        audioRecordingManager.release()
         textToSpeechManager.shutdown()
     }
 
