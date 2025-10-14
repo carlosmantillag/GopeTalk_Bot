@@ -3,20 +3,17 @@ package com.example.gopetalk_bot.main
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +21,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -33,8 +31,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import com.example.gopetalk_bot.voiceinteraction.VoiceInteractionService
 import com.example.gopetalk_bot.ui.theme.GopeTalk_BotTheme
+import com.example.gopetalk_bot.voiceinteraction.VoiceInteractionService
 import kotlin.math.max
 import kotlin.random.Random
 
@@ -109,8 +107,8 @@ class MainActivity : ComponentActivity(), MainContract.View {
                             )
                         }
 
-                        val rmsDb by AudioRmsMonitor.rmsDbFlow.collectAsState(initial = 0f)
-                        val sizeIncrease = (max(0f, rmsDb) * 20f).coerceIn(0f, 100f)
+                        val rms by AudioRmsMonitor.rmsDbFlow.collectAsState(initial = 0f)
+                        val sizeIncrease = (rms * 0.01f).coerceIn(0f, 200f)
                         val size by animateDpAsState(
                             targetValue = 200.dp + sizeIncrease.dp,
                             animationSpec = tween(durationMillis = 100), label = "sphere_size"

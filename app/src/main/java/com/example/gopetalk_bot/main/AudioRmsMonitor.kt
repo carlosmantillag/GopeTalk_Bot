@@ -1,13 +1,13 @@
 package com.example.gopetalk_bot.main
 
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object AudioRmsMonitor {
-    private val _rmsDbFlow = MutableSharedFlow<Float>(replay = 1)
-    val rmsDbFlow = _rmsDbFlow.asSharedFlow()
+    private val _rmsDbFlow = MutableStateFlow(0f)
+    val rmsDbFlow = _rmsDbFlow.asStateFlow()
 
-    suspend fun updateRmsDb(rmsDb: Float) {
-        _rmsDbFlow.emit(rmsDb)
+    fun updateRmsDb(rmsDb: Float) {
+        _rmsDbFlow.value = rmsDb
     }
 }

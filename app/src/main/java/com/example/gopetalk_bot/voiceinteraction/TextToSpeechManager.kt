@@ -15,7 +15,7 @@ class TextToSpeechManager(
     init {
         textToSpeech = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                textToSpeech?.language = Locale.forLanguageTag("es-ES")
+                textToSpeech?.language = Locale.forLanguageTag("es-MX")
                 isInitialized = true
             } else {
                 onInitError("Failed to initialize TextToSpeech.")

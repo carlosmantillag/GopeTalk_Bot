@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import com.example.gopetalk_bot.main.AudioRmsMonitor
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -11,6 +12,8 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.concurrent.thread
+import kotlin.math.log10
+import kotlin.math.sqrt
 
 class AudioRecordingManager(
     private val context: Context,
@@ -66,6 +69,7 @@ class AudioRecordingManager(
                 while (isRecording) {
                     val read = audioRecord?.read(data, 0, bufferSize) ?: 0
                     if (read > 0) {
+                        calculateRms(data, read)
                         try {
                             fos.write(data, 0, read)
                             totalBytesRead += read
@@ -81,6 +85,15 @@ class AudioRecordingManager(
         } catch (e: IOException) {
             logError("Could not create audio file output stream.", e)
         }
+    }
+
+    private fun calculateRms(data: ByteArray, readSize: Int) {
+        val shortData = ShortArray(readSize / 2)
+        ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shortData)
+
+        val sumOfSquares = shortData.sumOf { it.toDouble() * it.toDouble() }
+        val rms = sqrt(sumOfSquares / shortData.size)
+        AudioRmsMonitor.updateRmsDb(rms.toFloat())
     }
 
 

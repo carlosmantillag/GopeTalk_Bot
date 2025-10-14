@@ -7,19 +7,14 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.gopetalk_bot.R
 import java.io.File
 
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-
-class VoiceInteractionService : Service(), VoiceInteractionContract.View, SpeechRecognizerManager.SpeechRecognitionListener {
+class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
     private lateinit var presenter: VoiceInteractionContract.Presenter
-    private lateinit var speechRecognizerManager: SpeechRecognizerManager
     private lateinit var audioRecordingManager: AudioRecordingManager
     private lateinit var textToSpeechManager: TextToSpeechManager
 
@@ -28,7 +23,6 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View, Speech
         private const val TAG = "VoiceInteractionService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "VoiceInteractionChannel"
-        private const val HOTWORD = "gopebot"
     }
 
     override fun onCreate() {
@@ -37,47 +31,16 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View, Speech
         setupNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
 
-        speechRecognizerManager = SpeechRecognizerManager(this, this)
-        speechRecognizerManager.create()
-
         audioRecordingManager = AudioRecordingManager(this, ::logInfo, ::logError)
         textToSpeechManager = TextToSpeechManager(this) { error -> logError(error, null) }
 
         presenter.start()
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startListeningForHotword()
-        return START_STICKY
-    }
-
-    override fun startListeningForHotword() {
-        if (audioRecordingManager.isRecording()) return // Don't interrupt command recording
-        speechRecognizerManager.startListening()
-    }
-
-    // Implementation of SpeechRecognizerManager.SpeechRecognitionListener
-    override fun onHotwordDetected() {
         presenter.onHotwordDetected()
     }
 
-    override fun onSpeechEnded() {
-        presenter.onSpeechEnded()
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
     }
-
-    override fun onRmsChanged(rmsdB: Float) {
-        GlobalScope.launch {
-            com.example.gopetalk_bot.main.AudioRmsMonitor.updateRmsDb(rmsdB)
-        }
-    }
-
-    override fun onError(error: Int) {
-        if (error != SpeechRecognizer.ERROR_CLIENT && error != SpeechRecognizer.ERROR_NO_MATCH) {
-            logError("SpeechRecognizer error: $error", null)
-        }
-        startListeningForHotword()
-    }
-
 
     override fun startCommandRecording() {
         audioRecordingManager.startCommandRecording()
@@ -112,14 +75,14 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View, Speech
 
     private fun createNotification(): Notification = NotificationCompat.Builder(this, CHANNEL_ID)
         .setContentTitle("GopeTalk Bot Activo")
-        .setContentText("Escuchando por el hotword '$HOTWORD'...")
+        .setContentText("Grabando audio...")
         .setSmallIcon(R.mipmap.ic_launcher)
         .build()
 
     override fun onDestroy() {
         super.onDestroy()
+        presenter.onSpeechEnded()
         presenter.stop()
-        speechRecognizerManager.destroy()
         audioRecordingManager.release()
         textToSpeechManager.shutdown()
     }

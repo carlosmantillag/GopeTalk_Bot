@@ -10,7 +10,7 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
     private val apiService = ApiService()
 
     override fun start() {
-        view.logInfo("Presenter started. Ready for hotword detection.")
+        view.logInfo("Presenter started.")
     }
 
     override fun stop() {
@@ -18,18 +18,17 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
     }
 
     override fun onHotwordDetected() {
-        view.logInfo("Hotword detected! Starting command recording.")
+        view.logInfo("Starting command recording.")
         view.startCommandRecording()
     }
 
     override fun onSpeechEnded() {
-        view.logInfo("Speech ended. Stopping command recording.")
+        view.logInfo("Stopping command recording.")
         val audioFile = view.stopCommandRecording()
         if (audioFile != null) {
             onCommandAudioAvailable(audioFile)
         } else {
             view.logError("Could not get audio file to send.", null)
-            view.startListeningForHotword()
         }
     }
 
@@ -39,14 +38,12 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
             override fun onSuccess(response: BackendResponse) {
                 handleBackendResponse(response)
                 audioFile.delete() // Clean up the audio file
-                view.startListeningForHotword()
             }
 
             override fun onFailure(e: IOException) {
                 view.logError("ApiService failed to send audio.", e)
                 view.speak("Error de comunicación con el servidor.")
                 audioFile.delete() // Clean up the audio file
-                view.startListeningForHotword()
             }
         })
     }
