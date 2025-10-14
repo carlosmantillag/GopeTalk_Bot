@@ -1,7 +1,7 @@
 package com.example.gopetalk_bot.voiceinteraction
 
 import com.example.gopetalk_bot.network.ApiService
-import org.json.JSONObject
+import com.example.gopetalk_bot.network.BackendResponse
 import java.io.File
 import java.io.IOException
 
@@ -28,7 +28,7 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
         if (audioFile != null) {
             onCommandAudioAvailable(audioFile)
         } else {
-            view.logError("Could not get audio file to send.")
+            view.logError("Could not get audio file to send.", null)
             view.startListeningForHotword()
         }
     }
@@ -36,7 +36,7 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
     override fun onCommandAudioAvailable(audioFile: File) {
         view.logInfo("Sending audio file via ApiService.")
         apiService.sendAudioCommand(audioFile, object : ApiService.ApiCallback {
-            override fun onSuccess(response: String) {
+            override fun onSuccess(response: BackendResponse) {
                 handleBackendResponse(response)
                 audioFile.delete() // Clean up the audio file
                 view.startListeningForHotword()
@@ -51,24 +51,12 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
         })
     }
 
-    private fun handleBackendResponse(responseBody: String) {
-        try {
-            view.logInfo("Backend response: $responseBody")
-            val jsonResponse = JSONObject(responseBody)
-            val responseText = jsonResponse.optString("text", "No se recibió texto.")
-            val channels = jsonResponse.optJSONArray("channels")
-
-            var fullResponse = responseText
-            if (channels != null && channels.length() > 0) {
-                val channelList = (0 until channels.length()).map { channels.getString(it) }
-                // TODO: Display channels in the UI instead of just speaking them.
-                fullResponse += ". Los canales son: ${channelList.joinToString(", ")}"
-            }
-
-            view.speak(fullResponse)
-        } catch (e: Exception) {
-            view.logError("Error parsing backend response.", e)
-            view.speak("Recibí una respuesta inválida del servidor.")
+    private fun handleBackendResponse(response: BackendResponse) {
+        view.logInfo("Backend response: $response")
+        var fullResponse = response.text
+        if (response.channels.isNotEmpty()) {
+            fullResponse += ". Los canales son: ${response.channels.joinToString(", ")}"
         }
+        view.speak(fullResponse)
     }
 }

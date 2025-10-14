@@ -1,5 +1,7 @@
 package com.example.gopetalk_bot.network
 
+import com.google.gson.Gson
+import com.google.gson.JsonSyntaxException
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -12,15 +14,15 @@ import java.io.IOException
 class ApiService {
 
     private val client = OkHttpClient()
+    private val gson = Gson()
 
-    // TODO: Replace with your actual endpoint URLs
     private val sendCommandUrl = "YOUR_COMMAND_ENDPOINT_URL"
     private val channelListUrl = "YOUR_CHANNELS_ENDPOINT_URL"
     private val userListUrl = "YOUR_USERS_ENDPOINT_URL"
     private val connectToChannelUrl = "YOUR_CONNECT_ENDPOINT_URL"
 
     interface ApiCallback {
-        fun onSuccess(response: String)
+        fun onSuccess(response: BackendResponse)
         fun onFailure(e: IOException)
     }
 
@@ -53,10 +55,15 @@ class ApiService {
                             return
                         }
                         val body = res.body?.string()
-                        if (body != null) {
-                            callback.onSuccess(body)
-                        } else {
+                        if (body == null) {
                             callback.onFailure(IOException("Empty response body."))
+                            return
+                        }
+                        try {
+                            val backendResponse = gson.fromJson(body, BackendResponse::class.java)
+                            callback.onSuccess(backendResponse)
+                        } catch (e: JsonSyntaxException) {
+                            callback.onFailure(IOException("Failed to parse JSON response.", e))
                         }
                     }
                 }
@@ -66,6 +73,7 @@ class ApiService {
         }
     }
 
+    // TODO: Update other API methods to use a similar pattern with specific data classes
     fun getChannelList(callback: ApiCallback) {
         // TODO: Implement channel list fetching logic
         callback.onFailure(IOException("getChannelList not implemented."))

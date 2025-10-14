@@ -1,9 +1,9 @@
 package com.example.gopetalk_bot.main
 
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +14,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,11 +33,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import com.example.gopetalk_bot.main.MainContract
-import com.example.gopetalk_bot.main.MainPresenter
 import com.example.gopetalk_bot.voiceinteraction.VoiceInteractionService
 import com.example.gopetalk_bot.ui.theme.GopeTalk_BotTheme
+import kotlin.math.max
 import kotlin.random.Random
 
 class MainActivity : ComponentActivity(), MainContract.View {
@@ -50,24 +51,24 @@ class MainActivity : ComponentActivity(), MainContract.View {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        presenter = MainPresenter(this)
+        presenter = MainPresenter(this, this)
         presenter.onViewCreated()
 
         setContent {
             GopeTalk_BotTheme { // Wrap with your app's theme
-                Surface(modifier = Modifier.Companion.fillMaxSize()) {
+                Surface(modifier = Modifier.fillMaxSize()) {
                     Box(
-                        modifier = Modifier.Companion
+                        modifier = Modifier
                             .fillMaxSize()
                             .background(
-                                brush = Brush.Companion.verticalGradient(
+                                brush = Brush.verticalGradient(
                                     colors = listOf(
                                         Color(0xFF6A1B9A),
                                         Color(0xFF1976D2)
                                     ) // Purple to Blue
                                 )
                             ),
-                        contentAlignment = Alignment.Companion.Center
+                        contentAlignment = Alignment.Center
                     ) {
                         // Floating particles from bottom to top
                         repeat(50) { index ->
@@ -75,8 +76,8 @@ class MainActivity : ComponentActivity(), MainContract.View {
                                 rememberInfiniteTransition(label = "particle_animation_" + index)
 
                             val initialX =
-                                remember { (Random.Default.nextFloat() - 0.5f) * 400 } // horizontal range
-                            val duration = remember { Random.Default.nextInt(4000, 10000) }
+                                remember { (Random.nextFloat() - 0.5f) * 400 } // horizontal range
+                            val duration = remember { Random.nextInt(4000, 10000) }
 
                             val animatedAlpha by infiniteTransition.animateFloat(
                                 initialValue = 0.1f,
@@ -100,13 +101,20 @@ class MainActivity : ComponentActivity(), MainContract.View {
                             )
 
                             Box(
-                                modifier = Modifier.Companion
+                                modifier = Modifier
                                     .offset(x = initialX.dp, y = animatedY.dp)
                                     .size(2.dp)
                                     .clip(CircleShape)
-                                    .background(Color.Companion.White.copy(alpha = animatedAlpha))
+                                    .background(Color.White.copy(alpha = animatedAlpha))
                             )
                         }
+
+                        val rmsDb by AudioRmsMonitor.rmsDbFlow.collectAsState(initial = 0f)
+                        val sizeIncrease = (max(0f, rmsDb) * 20f).coerceIn(0f, 100f)
+                        val size by animateDpAsState(
+                            targetValue = 200.dp + sizeIncrease.dp,
+                            animationSpec = tween(durationMillis = 100), label = "sphere_size"
+                        )
 
                         val infiniteTransition =
                             rememberInfiniteTransition(label = "sphere_rotation")
@@ -120,10 +128,10 @@ class MainActivity : ComponentActivity(), MainContract.View {
                         )
 
                         Box(
-                            modifier = Modifier.Companion
-                                .size(200.dp) // Placeholder size for the sphere
+                            modifier = Modifier
+                                .size(size) // Placeholder size for the sphere
                                 .clip(CircleShape)
-                                .background(Color.Companion.Black)
+                                .background(Color.Black)
                                 .graphicsLayer {
                                     rotationZ = rotation
                                 }
@@ -134,14 +142,8 @@ class MainActivity : ComponentActivity(), MainContract.View {
         }
     }
 
-    override fun areAllPermissionsGranted(): Boolean {
-        return (presenter as MainPresenter).permissionsToRequest.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    override fun requestPermissions() {
-        requestMultiplePermissionsLauncher.launch((presenter as MainPresenter).permissionsToRequest)
+    override fun requestPermissions(permissions: Array<String>) {
+        requestMultiplePermissionsLauncher.launch(permissions)
     }
 
     override fun showPermissionsRequiredError() {

@@ -2,8 +2,7 @@ package com.example.gopetalk_bot.main
 
 interface MainContract {
     interface View {
-        fun areAllPermissionsGranted(): Boolean
-        fun requestPermissions()
+        fun requestPermissions(permissions: Array<String>)
         fun showPermissionsRequiredError()
         fun startVoiceService()
     }
