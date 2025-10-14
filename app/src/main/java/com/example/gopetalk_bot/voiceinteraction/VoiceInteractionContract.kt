@@ -9,7 +9,6 @@ interface VoiceInteractionContract {
         fun stopCommandRecording(): File?
         fun logInfo(message: String)
         fun logError(message: String, t: Throwable? = null)
-        fun onRmsChanged(rmsDb: Float)
     }
 
     interface Presenter {
