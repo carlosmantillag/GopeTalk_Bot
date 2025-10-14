@@ -2,6 +2,8 @@ package com.example.gopetalk_bot.voiceinteraction
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -14,6 +16,7 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
     private lateinit var speechRecognizer: SpeechRecognizer
     private lateinit var recognizerIntent: Intent
     private lateinit var ttsManager: TextToSpeechManager
+    private val mainThreadHandler = Handler(Looper.getMainLooper())
 
 
     override fun start(ttsManager: TextToSpeechManager) {
@@ -30,11 +33,17 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
             override fun onStart(utteranceId: String?) {}
 
             override fun onDone(utteranceId: String?) {
-                // Do not restart listening here, it will be restarted in onEndOfSpeech or onResults
+                // Restart listening AFTER the TTS has finished speaking to avoid loops.
+                mainThreadHandler.post {
+                    speechRecognizer.startListening(recognizerIntent)
+                }
             }
 
             override fun onError(utteranceId: String?) {
-                // Do not restart listening here, it will be restarted in onError of RecognitionListener
+                // Also restart listening on TTS error.
+                mainThreadHandler.post {
+                    speechRecognizer.startListening(recognizerIntent)
+                }
             }
         })
     }
@@ -54,7 +63,7 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
             view.logInfo("Recognized command: $commandText")
             handleCommand(commandText)
         }
-        speechRecognizer.startListening(recognizerIntent) // Restart listening after results
+        // DO NOT restart listening here. It will be restarted when the TTS is done speaking.
     }
 
     private fun handleCommand(commandText: String) {
@@ -69,7 +78,7 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
                 action = "list_users",
                 users = listOf("usuario 1", "usuario 2")
             )
-            commandText.contains("conectar al canal general") -> BackendResponse(
+            commandText.contains("conectar canal general") -> BackendResponse(
                 text = "Conectando al canal general",
                 action = "connect_to_channel"
             )
@@ -81,12 +90,16 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
     private fun handleBackendResponse(response: BackendResponse) {
         view.logInfo("Backend response: $response")
         var fullResponse = response.text
-        if (response.action == "list_channels") {
-            fullResponse = "La lista de canales es: ${response.channels.joinToString(", ")}"
-        } else if (response.action == "list_users") {
-            fullResponse = "La lista de usuarios es: ${response.users.joinToString(", ")}"
-        } else if (response.action == "connect_to_channel") {
-            fullResponse = "Los canales son: ${response.channels.joinToString(", ")}"
+        when (response.action) {
+            "list_channels" -> {
+                fullResponse = "La lista de canales es: ${response.channels.joinToString(", ")}"
+            }
+            "list_users" -> {
+                fullResponse = "La lista de usuarios es: ${response.users.joinToString(", ")}"
+            }
+            "connect_to_channel" -> {
+                fullResponse = response.text
+            }
         }
         val utteranceId = UUID.randomUUID().toString()
         view.speak(fullResponse, utteranceId)
@@ -111,7 +124,8 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
 
     override fun onError(error: Int) {
         view.logError("Speech recognizer error: $error", null)
-        speechRecognizer.startListening(recognizerIntent) // Restart listening after error
+        // It is safe to restart listening on recognizer error, as TTS is not active.
+        speechRecognizer.startListening(recognizerIntent)
     }
 
     override fun onPartialResults(partialResults: Bundle?) {}
