@@ -8,6 +8,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.UtteranceProgressListener
+import com.example.gopetalk_bot.main.AudioRmsMonitor
 import com.example.gopetalk_bot.network.BackendResponse
 import java.util.*
 
@@ -30,18 +31,24 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
 
         this.ttsManager.setUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
+            override fun onStart(utteranceId: String?) {
+                mainThreadHandler.post {
+                    AudioRmsMonitor.updateRmsDb(10f) // Simulate bot speaking loud
+                }
+            }
 
             override fun onDone(utteranceId: String?) {
-                // Restart listening AFTER the TTS has finished speaking to avoid loops.
                 mainThreadHandler.post {
+                    AudioRmsMonitor.updateRmsDb(0f)
+                    // Restart listening AFTER the TTS has finished speaking to avoid loops.
                     speechRecognizer.startListening(recognizerIntent)
                 }
             }
 
             override fun onError(utteranceId: String?) {
-                // Also restart listening on TTS error.
                 mainThreadHandler.post {
+                    AudioRmsMonitor.updateRmsDb(0f)
+                    // Also restart listening on TTS error.
                     speechRecognizer.startListening(recognizerIntent)
                 }
             }
@@ -114,16 +121,20 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
         view.logInfo("Beginning of speech.")
     }
 
-    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onRmsChanged(rmsdB: Float) {
+        AudioRmsMonitor.updateRmsDb(rmsdB)
+    }
 
     override fun onBufferReceived(buffer: ByteArray?) {}
 
     override fun onEndOfSpeech() {
         view.logInfo("End of speech.")
+        AudioRmsMonitor.updateRmsDb(0f)
     }
 
     override fun onError(error: Int) {
         view.logError("Speech recognizer error: $error", null)
+        AudioRmsMonitor.updateRmsDb(0f)
         // It is safe to restart listening on recognizer error, as TTS is not active.
         speechRecognizer.startListening(recognizerIntent)
     }

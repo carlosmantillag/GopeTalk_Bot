@@ -56,14 +56,7 @@ class AudioRecordingManager(
                 writeAudioDataToFile()
             }
 
-            Handler(Looper.getMainLooper()).postDelayed({
-                if (isRecording) {
-                    val audioFile = stopCommandRecording()
-                    if (audioFile != null) {
-                        onRecordingStopped(audioFile)
-                    }
-                }
-            }, 5000)
+
         } catch (e: SecurityException) {
             logError("Audio recording permission not granted.", e)
         }

@@ -61,8 +61,8 @@ class MainActivity : ComponentActivity(), MainContract.View {
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        Color(0xFF6A1B9A),
-                                        Color(0xFF1976D2)
+                                        Color(0xFF2E0C43),
+                                        Color(0xFF0E4377)
                                     ) // Purple to Blue
                                 )
                             ),
@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity(), MainContract.View {
                         }
 
                         val rms by AudioRmsMonitor.rmsDbFlow.collectAsState(initial = 0f)
-                        val sizeIncrease = (rms * 0.01f).coerceIn(0f, 200f)
+                        val sizeIncrease = (rms * 2f).coerceIn(0f, 200f)
                         val size by animateDpAsState(
                             targetValue = 200.dp + sizeIncrease.dp,
                             animationSpec = tween(durationMillis = 100), label = "sphere_size"
@@ -129,10 +129,9 @@ class MainActivity : ComponentActivity(), MainContract.View {
                             modifier = Modifier
                                 .size(size) // Placeholder size for the sphere
                                 .clip(CircleShape)
-                                .background(Color.Black)
-                                .graphicsLayer {
-                                    rotationZ = rotation
-                                }
+                                .background(
+                                    color = Color.Black
+                                )
                         )
                     }
                 }
