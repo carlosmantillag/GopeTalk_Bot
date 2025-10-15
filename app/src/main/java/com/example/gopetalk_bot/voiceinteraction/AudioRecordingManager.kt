@@ -28,6 +28,8 @@ class AudioRecordingManager(
     private var recordingThread: Thread? = null
     private var audioFile: File? = null
     @Volatile
+    private var isMonitoring = false
+    @Volatile
     private var isRecording = false
 
     private val audioSource = MediaRecorder.AudioSource.MIC
@@ -36,87 +38,124 @@ class AudioRecordingManager(
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
     private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
+    // Silence detection parameters
+    private val silenceThresholdDb = 70 // Quieter than a quiet library
+    private val silenceTimeoutMs = 2000L // 2 seconds of silence to stop
+    private var lastSoundTime = 0L
+    private val handler = Handler(Looper.getMainLooper())
+
     fun isRecording(): Boolean = isRecording
 
-    fun startCommandRecording() {
-        if (isRecording) return
+    fun startMonitoring() {
+        if (isMonitoring) return
         try {
-            audioFile = File(context.cacheDir, "command.wav")
             audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
                 logError("AudioRecord could not be initialized.", null)
                 return
             }
 
-            isRecording = true
+            isMonitoring = true
             audioRecord?.startRecording()
-            logInfo("Started recording command audio.")
+            logInfo("Started audio monitoring.")
 
             recordingThread = thread {
-                writeAudioDataToFile()
+                monitorAudio()
             }
-
-
         } catch (e: SecurityException) {
             logError("Audio recording permission not granted.", e)
         }
     }
 
-    private fun writeAudioDataToFile() {
+    private fun monitorAudio() {
         val data = ByteArray(bufferSize)
-        val file = audioFile ?: return
-        try {
-            FileOutputStream(file).use { fos ->
-                // Write a placeholder for the WAV header
-                fos.write(ByteArray(44))
+        var fos: FileOutputStream? = null
+        var totalBytesRead = 0
 
-                var totalBytesRead = 0
-                while (isRecording) {
-                    val read = audioRecord?.read(data, 0, bufferSize) ?: 0
-                    if (read > 0) {
-                        calculateRms(data, read)
-                        try {
-                            fos.write(data, 0, read)
-                            totalBytesRead += read
-                        } catch (e: IOException) {
-                            logError("Error writing audio data to file.", e)
-                            break
-                        }
+        while (isMonitoring) {
+            val read = audioRecord?.read(data, 0, bufferSize) ?: 0
+            if (read > 0) {
+                val rmsDb = calculateRmsDb(data, read)
+                logInfo("Current audio level (dB): $rmsDb")
+                AudioRmsMonitor.updateRmsDb(rmsDb)
+
+                if (rmsDb > silenceThresholdDb) {
+                    lastSoundTime = System.currentTimeMillis()
+                    if (!isRecording) {
+                        isRecording = true
+                        logInfo("Sound detected, starting recording.")
+                        audioFile = File(context.cacheDir, "command.wav")
+                        fos = FileOutputStream(audioFile)
+                        // Write a placeholder for the WAV header
+                        fos.write(ByteArray(44))
                     }
                 }
-                // Now that we know the size, write the real WAV header
-                writeWavHeader(file, totalBytesRead)
+
+                if (isRecording) {
+                    fos?.write(data, 0, read)
+                    totalBytesRead += read
+
+                    if (System.currentTimeMillis() - lastSoundTime > silenceTimeoutMs) {
+                        logInfo("Silence detected, stopping recording.")
+                        stopRecordingAndFinalize(fos, totalBytesRead)
+                        totalBytesRead = 0 // Reset for next recording
+                    }
+                }
             }
-        } catch (e: IOException) {
-            logError("Could not create audio file output stream.", e)
+        }
+        // If monitoring stops while recording, finalize the file.
+        if (isRecording) {
+            stopRecordingAndFinalize(fos, totalBytesRead)
         }
     }
 
-    private fun calculateRms(data: ByteArray, readSize: Int) {
+    private fun stopRecordingAndFinalize(fos: FileOutputStream?, totalBytesRead: Int) {
+        isRecording = false
+        try {
+            fos?.close()
+            audioFile?.let { file ->
+                if (totalBytesRead > 0) {
+                    writeWavHeader(file, totalBytesRead)
+                    handler.post { onRecordingStopped(file) }
+                } else {
+                    file.delete() // Delete empty file
+                }
+            }
+        } catch (e: IOException) {
+            logError("Error closing file stream.", e)
+        }
+    }
+
+
+    private fun calculateRmsDb(data: ByteArray, readSize: Int): Float {
         val shortData = ShortArray(readSize / 2)
         ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shortData)
 
         val sumOfSquares = shortData.sumOf { it.toDouble() * it.toDouble() }
         val rms = sqrt(sumOfSquares / shortData.size)
-        AudioRmsMonitor.updateRmsDb(rms.toFloat())
+
+        // Clamp RMS to avoid log10(0)
+        val clampedRms = if (rms > 0) rms else 1.0
+        // Basic dB calculation, you might need a reference value for more accuracy
+        val db = 20 * log10(clampedRms)
+        return db.toFloat()
     }
 
 
-    fun stopCommandRecording(): File? {
-        if (!isRecording) return null
+    fun stopMonitoring() {
+        if (!isMonitoring) return
 
-        isRecording = false
+        isMonitoring = false
         try {
             recordingThread?.join(500) // Wait a bit for the thread to finish
             audioRecord?.stop()
             audioRecord?.release()
             audioRecord = null
             recordingThread = null
-            logInfo("Stopped recording command audio.")
+            logInfo("Stopped audio monitoring.")
         } catch (e: Exception) {
             logError("Error stopping AudioRecord.", e)
         }
-        return audioFile
     }
 
     @Throws(IOException::class)
@@ -147,8 +186,8 @@ class AudioRecordingManager(
     }
 
     fun release() {
-        if (isRecording) {
-            stopCommandRecording()
+        if (isMonitoring) {
+            stopMonitoring()
         }
     }
 }
