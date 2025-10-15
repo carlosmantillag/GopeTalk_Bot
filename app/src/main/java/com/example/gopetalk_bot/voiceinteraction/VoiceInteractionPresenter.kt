@@ -19,7 +19,6 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
     private lateinit var ttsManager: TextToSpeechManager
     private val mainThreadHandler = Handler(Looper.getMainLooper())
 
-
     override fun start(ttsManager: TextToSpeechManager) {
         this.ttsManager = ttsManager
         view.logInfo("Presenter started.")
@@ -33,14 +32,13 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
         this.ttsManager.setUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
                 mainThreadHandler.post {
-                    AudioRmsMonitor.updateRmsDb(10f) // Simulate bot speaking loud
+                    AudioRmsMonitor.updateRmsDb(10f)
                 }
             }
 
             override fun onDone(utteranceId: String?) {
                 mainThreadHandler.post {
                     AudioRmsMonitor.updateRmsDb(0f)
-                    // Restart listening AFTER the TTS has finished speaking to avoid loops.
                     speechRecognizer.startListening(recognizerIntent)
                 }
             }
@@ -48,7 +46,6 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
             override fun onError(utteranceId: String?) {
                 mainThreadHandler.post {
                     AudioRmsMonitor.updateRmsDb(0f)
-                    // Also restart listening on TTS error.
                     speechRecognizer.startListening(recognizerIntent)
                 }
             }
@@ -70,22 +67,21 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
             view.logInfo("Recognized command: $commandText")
             handleCommand(commandText)
         }
-        // DO NOT restart listening here. It will be restarted when the TTS is done speaking.
     }
 
     private fun handleCommand(commandText: String) {
         val simulatedResponse = when {
-            commandText.contains("lista de canales") -> BackendResponse(
+            Regex("lista.*canales", RegexOption.IGNORE_CASE).containsMatchIn(commandText) -> BackendResponse(
                 text = "la lista de canales es: canal 1, canal 2",
                 action = "list_channels",
                 channels = listOf("canal 1", "canal 2")
             )
-            commandText.contains("lista de usuarios") -> BackendResponse(
+            Regex("lista.*usuarios", RegexOption.IGNORE_CASE).containsMatchIn(commandText) -> BackendResponse(
                 text = "la lista de usuarios es: usuario 1, usuario 2",
                 action = "list_users",
                 users = listOf("usuario 1", "usuario 2")
             )
-            commandText.contains("conectar canal general") -> BackendResponse(
+            Regex("conectar.*canal.*general", RegexOption.IGNORE_CASE).containsMatchIn(commandText) -> BackendResponse(
                 text = "Conectando al canal general",
                 action = "connect_to_channel"
             )
@@ -112,7 +108,6 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
         view.speak(fullResponse, utteranceId)
     }
 
-    // RecognitionListener methods
     override fun onReadyForSpeech(params: Bundle?) {
         view.logInfo("Ready for speech.")
     }
@@ -135,7 +130,6 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
     override fun onError(error: Int) {
         view.logError("Speech recognizer error: $error", null)
         AudioRmsMonitor.updateRmsDb(0f)
-        // It is safe to restart listening on recognizer error, as TTS is not active.
         speechRecognizer.startListening(recognizerIntent)
     }
 
