@@ -53,9 +53,11 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
     implementation(libs.gson)
     implementation(libs.retrofit)
     implementation(libs.converter.gson)
+    implementation(libs.converter.scalars)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

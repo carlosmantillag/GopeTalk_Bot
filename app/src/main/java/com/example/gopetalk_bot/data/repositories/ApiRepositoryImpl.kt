@@ -22,8 +22,8 @@ class ApiRepositoryImpl(
             audioFile = audioData.file,
             userId = userId,
             callback = object : RemoteDataSource.ApiCallback {
-                override fun onSuccess(statusCode: Int) {
-                    callback(ApiResponse.Success(statusCode))
+                override fun onSuccess(statusCode: Int, body: String) {
+                    callback(ApiResponse.Success(statusCode, body))
                 }
 
                 override fun onFailure(e: IOException) {

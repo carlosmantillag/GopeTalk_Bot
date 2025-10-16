@@ -59,7 +59,7 @@ class VoiceInteractionPresenter(
             mainThreadHandler.post {
                 when (response) {
                     is ApiResponse.Success -> {
-                        view.logInfo("Audio enviado correctamente. Código: ${response.statusCode}")
+                        view.logInfo("Audio enviado correctamente. Código: ${response.statusCode}. Respuesta: ${response.body}")
                     }
                     is ApiResponse.Error -> {
                         view.logError("API Error: ${response.message}", response.exception)

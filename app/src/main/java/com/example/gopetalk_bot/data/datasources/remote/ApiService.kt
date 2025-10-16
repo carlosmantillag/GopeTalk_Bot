@@ -1,19 +1,17 @@
 package com.example.gopetalk_bot.data.datasources.remote
 
-import okhttp3.RequestBody
-import okhttp3.ResponseBody
+import okhttp3.MultipartBody
 import retrofit2.Call
-import retrofit2.http.Body
 import retrofit2.http.Header
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 
-/**
- * Retrofit API service interface
- */
 interface ApiService {
+    @Multipart
     @POST("audio/ingest")
     fun sendAudioCommand(
         @Header("X-User-ID") userId: String,
-        @Body audioFile: RequestBody
-    ): Call<ResponseBody>
+        @Part file: MultipartBody.Part
+    ): Call<String>
 }
