@@ -118,9 +118,9 @@ class MainActivity : ComponentActivity(), MainContract.View {
                         }
 
                         val rms by AudioRmsMonitor.rmsDbFlow.collectAsState(initial = 0f)
-                        val sizeIncrease = (rms * 2f).coerceIn(0f, 200f)
+                        val sizeIncrease = (rms * 2f).coerceIn(80f, 100f)
                         val size by animateDpAsState(
-                            targetValue = 200.dp + sizeIncrease.dp,
+                            targetValue = 150.dp + sizeIncrease.dp,
                             animationSpec = tween(durationMillis = 100), label = "sphere_size"
                         )
 

@@ -18,6 +18,9 @@ import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.io.File
 import java.io.IOException
 
+/**
+ * Remote data source for API calls
+ */
 class RemoteDataSource(
     private val backendHost: String = "159.223.150.185",
 ) {

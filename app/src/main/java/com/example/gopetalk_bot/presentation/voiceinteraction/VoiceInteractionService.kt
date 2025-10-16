@@ -12,12 +12,15 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.gopetalk_bot.R
 import com.example.gopetalk_bot.data.datasources.local.AudioDataSource
+import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSource
 import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSource
 import com.example.gopetalk_bot.data.repositories.ApiRepositoryImpl
 import com.example.gopetalk_bot.data.repositories.AudioRepositoryImpl
+import com.example.gopetalk_bot.data.repositories.TextToSpeechRepositoryImpl
 import com.example.gopetalk_bot.domain.usecases.GetRecordedAudioUseCase
 import com.example.gopetalk_bot.domain.usecases.MonitorAudioLevelUseCase
 import com.example.gopetalk_bot.domain.usecases.SendAudioCommandUseCase
+import com.example.gopetalk_bot.domain.usecases.SpeakTextUseCase
 import com.example.gopetalk_bot.domain.usecases.StartAudioMonitoringUseCase
 import com.example.gopetalk_bot.domain.usecases.StopAudioMonitoringUseCase
 
@@ -50,11 +53,18 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         val remoteDataSource = RemoteDataSource()
         val apiRepository = ApiRepositoryImpl(remoteDataSource)
         
+        // TTS setup
+        val ttsDataSource = TextToSpeechDataSource(this) { error ->
+            logError("TTS Error: $error")
+        }
+        val ttsRepository = TextToSpeechRepositoryImpl(ttsDataSource)
+        
         val startAudioMonitoringUseCase = StartAudioMonitoringUseCase(audioRepository)
         val stopAudioMonitoringUseCase = StopAudioMonitoringUseCase(audioRepository)
         val monitorAudioLevelUseCase = MonitorAudioLevelUseCase(audioRepository)
         val getRecordedAudioUseCase = GetRecordedAudioUseCase(audioRepository)
         val sendAudioCommandUseCase = SendAudioCommandUseCase(apiRepository)
+        val speakTextUseCase = SpeakTextUseCase(ttsRepository)
         
         presenter = VoiceInteractionPresenter(
             view = this,
@@ -62,7 +72,8 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
             stopAudioMonitoringUseCase = stopAudioMonitoringUseCase,
             monitorAudioLevelUseCase = monitorAudioLevelUseCase,
             getRecordedAudioUseCase = getRecordedAudioUseCase,
-            sendAudioCommandUseCase = sendAudioCommandUseCase
+            sendAudioCommandUseCase = sendAudioCommandUseCase,
+            speakTextUseCase = speakTextUseCase
         )
         
         presenter.start()
