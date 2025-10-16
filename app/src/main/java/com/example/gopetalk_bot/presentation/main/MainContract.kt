@@ -8,6 +8,7 @@ interface MainContract {
         fun requestPermissions(permissions: Array<String>)
         fun showPermissionsRequiredError()
         fun startVoiceService()
+        fun speakWelcomeMessage(username: String)
     }
 
     interface Presenter {

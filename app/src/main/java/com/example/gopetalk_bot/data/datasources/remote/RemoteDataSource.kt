@@ -1,8 +1,8 @@
-package com.example.gopetalk_bot.data.datasources.remote
-
+import com.example.gopetalk_bot.BuildConfig
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.example.gopetalk_bot.data.datasources.remote.ApiService
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -18,15 +18,10 @@ import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.io.File
 import java.io.IOException
 
-/**
- * Remote data source for API calls
- */
-class RemoteDataSource(
-    private val backendHost: String = "159.223.150.185",
-) {
+class RemoteDataSource {
     private val handler = Handler(Looper.getMainLooper())
-    private val baseUrl = "http://$backendHost/"
-    
+    private val baseUrl = "http://${BuildConfig.BACKEND_HOST}/"
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)

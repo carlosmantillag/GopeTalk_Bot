@@ -3,12 +3,12 @@ package com.example.gopetalk_bot.domain.usecases
 import com.example.gopetalk_bot.domain.repositories.TextToSpeechRepository
 
 /**
- * Use case for speaking text
+ * Use case for shutting down the TTS engine
  */
-class SpeakTextUseCase(
+class ShutdownTtsUseCase(
     private val textToSpeechRepository: TextToSpeechRepository
 ) {
-    fun execute(text: String, utteranceId: String) {
-        textToSpeechRepository.speak(text, utteranceId)
+    fun execute() {
+        textToSpeechRepository.shutdown()
     }
 }

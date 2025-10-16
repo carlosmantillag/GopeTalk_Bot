@@ -19,6 +19,16 @@ interface AudioRepository {
     fun stopMonitoring()
     
     /**
+     * Pause audio recording (e.g., during TTS playback)
+     */
+    fun pauseRecording()
+    
+    /**
+     * Resume audio recording
+     */
+    fun resumeRecording()
+    
+    /**
      * Get audio level stream
      */
     fun getAudioLevelStream(): Flow<AudioLevel>

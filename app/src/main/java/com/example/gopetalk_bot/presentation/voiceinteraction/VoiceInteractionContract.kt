@@ -15,5 +15,6 @@ interface VoiceInteractionContract {
     interface Presenter {
         fun start()
         fun stop()
+        fun speakWelcome(username: String)
     }
 }

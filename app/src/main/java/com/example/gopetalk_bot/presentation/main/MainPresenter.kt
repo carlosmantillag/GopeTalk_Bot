@@ -7,10 +7,16 @@ import com.example.gopetalk_bot.domain.usecases.CheckPermissionsUseCase
  */
 class MainPresenter(
     private val view: MainContract.View,
-    private val checkPermissionsUseCase: CheckPermissionsUseCase
+    private val checkPermissionsUseCase: CheckPermissionsUseCase,
+    private val userRepository: com.example.gopetalk_bot.data.repositories.UserRepository
 ) : MainContract.Presenter {
 
     override fun onViewCreated() {
+        // Speak welcome message with username
+        val username = userRepository.getUsername()
+        view.speakWelcomeMessage(username)
+        
+        // Check and request permissions
         val permissionStatus = checkPermissionsUseCase.execute()
         
         if (permissionStatus.allGranted) {

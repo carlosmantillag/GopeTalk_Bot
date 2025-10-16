@@ -33,6 +33,9 @@ class AudioDataSource(
     
     @Volatile
     private var isRecording = false
+    
+    @Volatile
+    private var isPaused = false
 
     private val audioSource = MediaRecorder.AudioSource.MIC
     private val sampleRate = 16000
@@ -88,6 +91,11 @@ class AudioDataSource(
             if (read > 0) {
                 val rmsDb = calculateRmsDb(data, read)
                 onAudioLevel(AudioLevelData(rmsDb))
+
+                // Skip processing if paused (e.g., during TTS playback)
+                if (isPaused) {
+                    continue
+                }
 
                 if (rmsDb > silenceThresholdDb) {
                     lastSoundTime = System.currentTimeMillis()
@@ -187,6 +195,16 @@ class AudioDataSource(
             it.seek(0)
             it.write(header)
         }
+    }
+
+    fun pauseRecording() {
+        isPaused = true
+        Log.d(TAG, "Audio recording paused.")
+    }
+
+    fun resumeRecording() {
+        isPaused = false
+        Log.d(TAG, "Audio recording resumed.")
     }
 
     fun stopMonitoring() {
