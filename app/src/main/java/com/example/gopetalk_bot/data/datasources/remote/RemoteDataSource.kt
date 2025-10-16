@@ -21,11 +21,11 @@ import java.io.IOException
  */
 class RemoteDataSource(
     private val backendHost: String = "159.223.150.185",
-    private val backendPort: Int = 8086
+
 ) {
     private val client = OkHttpClient()
     private val handler = Handler(Looper.getMainLooper())
-    private val baseUrl = "http://$backendHost:$backendPort/"
+    private val baseUrl = "http://$backendHost/"
     
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
