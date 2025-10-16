@@ -1,5 +1,7 @@
 package com.example.gopetalk_bot.presentation.voiceinteraction
 
+import RemoteDataSource
+import VoiceInteractionPresenter
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -13,14 +15,17 @@ import androidx.core.app.NotificationCompat
 import com.example.gopetalk_bot.R
 import com.example.gopetalk_bot.data.datasources.local.AudioDataSource
 import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSource
-import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSource
 import com.example.gopetalk_bot.data.repositories.ApiRepositoryImpl
 import com.example.gopetalk_bot.data.repositories.AudioRepositoryImpl
 import com.example.gopetalk_bot.data.repositories.TextToSpeechRepositoryImpl
 import com.example.gopetalk_bot.domain.usecases.GetRecordedAudioUseCase
 import com.example.gopetalk_bot.domain.usecases.MonitorAudioLevelUseCase
+import com.example.gopetalk_bot.domain.usecases.PauseAudioRecordingUseCase
+import com.example.gopetalk_bot.domain.usecases.ResumeAudioRecordingUseCase
 import com.example.gopetalk_bot.domain.usecases.SendAudioCommandUseCase
 import com.example.gopetalk_bot.domain.usecases.SpeakTextUseCase
+import com.example.gopetalk_bot.domain.usecases.SetTtsListenerUseCase
+import com.example.gopetalk_bot.domain.usecases.ShutdownTtsUseCase
 import com.example.gopetalk_bot.domain.usecases.StartAudioMonitoringUseCase
 import com.example.gopetalk_bot.domain.usecases.StopAudioMonitoringUseCase
 
@@ -38,6 +43,8 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         private const val TAG = "VoiceInteractionService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "VoiceInteractionChannel"
+        const val ACTION_SPEAK_WELCOME = "com.example.gopetalk_bot.ACTION_SPEAK_WELCOME"
+        const val EXTRA_USERNAME = "username"
     }
 
     override fun onCreate() {
@@ -52,34 +59,50 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         
         val remoteDataSource = RemoteDataSource()
         val apiRepository = ApiRepositoryImpl(remoteDataSource)
-        
+
         // TTS setup
         val ttsDataSource = TextToSpeechDataSource(this) { error ->
             logError("TTS Error: $error")
         }
         val ttsRepository = TextToSpeechRepositoryImpl(ttsDataSource)
-        
+
         val startAudioMonitoringUseCase = StartAudioMonitoringUseCase(audioRepository)
         val stopAudioMonitoringUseCase = StopAudioMonitoringUseCase(audioRepository)
+        val pauseAudioRecordingUseCase = PauseAudioRecordingUseCase(audioRepository)
+        val resumeAudioRecordingUseCase = ResumeAudioRecordingUseCase(audioRepository)
         val monitorAudioLevelUseCase = MonitorAudioLevelUseCase(audioRepository)
         val getRecordedAudioUseCase = GetRecordedAudioUseCase(audioRepository)
         val sendAudioCommandUseCase = SendAudioCommandUseCase(apiRepository)
         val speakTextUseCase = SpeakTextUseCase(ttsRepository)
-        
+        val setTtsListenerUseCase = SetTtsListenerUseCase(ttsRepository)
+        val shutdownTtsUseCase = ShutdownTtsUseCase(ttsRepository)
+
         presenter = VoiceInteractionPresenter(
             view = this,
             startAudioMonitoringUseCase = startAudioMonitoringUseCase,
             stopAudioMonitoringUseCase = stopAudioMonitoringUseCase,
+            pauseAudioRecordingUseCase = pauseAudioRecordingUseCase,
+            resumeAudioRecordingUseCase = resumeAudioRecordingUseCase,
             monitorAudioLevelUseCase = monitorAudioLevelUseCase,
             getRecordedAudioUseCase = getRecordedAudioUseCase,
             sendAudioCommandUseCase = sendAudioCommandUseCase,
-            speakTextUseCase = speakTextUseCase
+            speakTextUseCase = speakTextUseCase,
+            setTtsListenerUseCase = setTtsListenerUseCase,
+            shutdownTtsUseCase = shutdownTtsUseCase
         )
         
         presenter.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        intent?.let {
+            when (it.action) {
+                ACTION_SPEAK_WELCOME -> {
+                    val username = it.getStringExtra(EXTRA_USERNAME) ?: "usuario"
+                    presenter.speakWelcome(username)
+                }
+            }
+        }
         return START_STICKY
     }
 

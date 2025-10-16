@@ -32,6 +32,14 @@ class AudioRepositoryImpl(
         audioDataSource.stopMonitoring()
     }
 
+    override fun pauseRecording() {
+        audioDataSource.pauseRecording()
+    }
+
+    override fun resumeRecording() {
+        audioDataSource.resumeRecording()
+    }
+
     override fun getAudioLevelStream(): Flow<AudioLevel> = callbackFlow {
         audioLevelCallback = { audioLevelData ->
             trySend(AudioLevel(rmsDb = audioLevelData.rmsDb))

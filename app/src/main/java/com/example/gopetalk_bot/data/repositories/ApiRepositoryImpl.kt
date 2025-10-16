@@ -1,6 +1,6 @@
 package com.example.gopetalk_bot.data.repositories
 
-import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSource
+import RemoteDataSource
 import com.example.gopetalk_bot.domain.entities.ApiResponse
 import com.example.gopetalk_bot.domain.entities.AudioData
 import com.example.gopetalk_bot.domain.repositories.ApiRepository

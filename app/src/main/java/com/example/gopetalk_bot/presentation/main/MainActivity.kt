@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.gopetalk_bot.data.datasources.local.PermissionDataSource
 import com.example.gopetalk_bot.data.repositories.PermissionRepositoryImpl
+import com.example.gopetalk_bot.data.datasources.local.UserPreferences
+import com.example.gopetalk_bot.data.repositories.UserRepositoryImpl
 import com.example.gopetalk_bot.domain.usecases.CheckPermissionsUseCase
 import com.example.gopetalk_bot.presentation.common.AudioRmsMonitor
 import com.example.gopetalk_bot.presentation.voiceinteraction.VoiceInteractionService
@@ -59,7 +61,11 @@ class MainActivity : ComponentActivity(), MainContract.View {
         val permissionRepository = PermissionRepositoryImpl(permissionDataSource)
         val checkPermissionsUseCase = CheckPermissionsUseCase(permissionRepository)
         
-        presenter = MainPresenter(this, checkPermissionsUseCase)
+        // User related dependencies
+        val userPreferences = UserPreferences(this)
+        val userRepository = UserRepositoryImpl(userPreferences)
+        
+        presenter = MainPresenter(this, checkPermissionsUseCase, userRepository)
         presenter.onViewCreated()
 
         setContent {
@@ -143,13 +149,24 @@ class MainActivity : ComponentActivity(), MainContract.View {
     override fun showPermissionsRequiredError() {
         Toast.makeText(
             this,
-            "Todos los permisos son necesarios para que la app funcione.",
+            "Se requieren permisos para continuar",
             Toast.LENGTH_LONG
         ).show()
     }
 
     override fun startVoiceService() {
-        val intent = Intent(this, VoiceInteractionService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(Intent(this, VoiceInteractionService::class.java))
+        } else {
+            startService(Intent(this, VoiceInteractionService::class.java))
+        }
+    }
+    
+    override fun speakWelcomeMessage(username: String) {
+        val intent = Intent(this, VoiceInteractionService::class.java).apply {
+            action = VoiceInteractionService.ACTION_SPEAK_WELCOME
+            putExtra(VoiceInteractionService.EXTRA_USERNAME, username)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
