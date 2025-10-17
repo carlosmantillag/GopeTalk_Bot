@@ -1,6 +1,6 @@
 package com.example.gopetalk_bot.presentation.voiceinteraction
 
-import RemoteDataSource
+import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSource
 import VoiceInteractionPresenter
 import android.app.Notification
 import android.app.NotificationChannel
@@ -15,9 +15,13 @@ import androidx.core.app.NotificationCompat
 import com.example.gopetalk_bot.R
 import com.example.gopetalk_bot.data.datasources.local.AudioDataSource
 import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSource
+import com.example.gopetalk_bot.data.datasources.local.AudioPlayerDataSource
+import com.example.gopetalk_bot.data.datasources.remote.WebSocketDataSource
 import com.example.gopetalk_bot.data.repositories.ApiRepositoryImpl
 import com.example.gopetalk_bot.data.repositories.AudioRepositoryImpl
 import com.example.gopetalk_bot.data.repositories.TextToSpeechRepositoryImpl
+import com.example.gopetalk_bot.data.repositories.WebSocketRepositoryImpl
+import com.example.gopetalk_bot.data.repositories.AudioPlayerRepositoryImpl
 import com.example.gopetalk_bot.domain.usecases.GetRecordedAudioUseCase
 import com.example.gopetalk_bot.domain.usecases.MonitorAudioLevelUseCase
 import com.example.gopetalk_bot.domain.usecases.PauseAudioRecordingUseCase
@@ -28,10 +32,11 @@ import com.example.gopetalk_bot.domain.usecases.SetTtsListenerUseCase
 import com.example.gopetalk_bot.domain.usecases.ShutdownTtsUseCase
 import com.example.gopetalk_bot.domain.usecases.StartAudioMonitoringUseCase
 import com.example.gopetalk_bot.domain.usecases.StopAudioMonitoringUseCase
+import com.example.gopetalk_bot.domain.usecases.ConnectWebSocketUseCase
+import com.example.gopetalk_bot.domain.usecases.DisconnectWebSocketUseCase
+import com.example.gopetalk_bot.domain.usecases.PlayAudioFileUseCase
+import com.example.gopetalk_bot.domain.usecases.UpdateWebSocketChannelUseCase
 
-/**
- * Service for Voice Interaction following MVP + Clean Architecture
- */
 class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
     private lateinit var presenter: VoiceInteractionContract.Presenter
@@ -53,14 +58,12 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         setupNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         
-        // Manual dependency injection
         val audioDataSource = AudioDataSource(this)
         val audioRepository = AudioRepositoryImpl(audioDataSource)
         
         val remoteDataSource = RemoteDataSource()
         val apiRepository = ApiRepositoryImpl(remoteDataSource)
 
-        // TTS setup
         val ttsDataSource = TextToSpeechDataSource(this) { error ->
             logError("TTS Error: $error")
         }
@@ -76,6 +79,14 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         val speakTextUseCase = SpeakTextUseCase(ttsRepository)
         val setTtsListenerUseCase = SetTtsListenerUseCase(ttsRepository)
         val shutdownTtsUseCase = ShutdownTtsUseCase(ttsRepository)
+        val webSocketDataSource = WebSocketDataSource()
+        val webSocketRepository = WebSocketRepositoryImpl(webSocketDataSource)
+        val connectWebSocketUseCase = ConnectWebSocketUseCase(webSocketRepository)
+        val disconnectWebSocketUseCase = DisconnectWebSocketUseCase(webSocketRepository)
+        val updateWebSocketChannelUseCase = UpdateWebSocketChannelUseCase(webSocketRepository)
+        val audioPlayerDataSource = AudioPlayerDataSource()
+        val audioPlayerRepository = AudioPlayerRepositoryImpl(audioPlayerDataSource)
+        val playAudioFileUseCase = PlayAudioFileUseCase(audioPlayerRepository)
 
         presenter = VoiceInteractionPresenter(
             view = this,
@@ -88,7 +99,11 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
             sendAudioCommandUseCase = sendAudioCommandUseCase,
             speakTextUseCase = speakTextUseCase,
             setTtsListenerUseCase = setTtsListenerUseCase,
-            shutdownTtsUseCase = shutdownTtsUseCase
+            shutdownTtsUseCase = shutdownTtsUseCase,
+            connectWebSocketUseCase = connectWebSocketUseCase,
+            disconnectWebSocketUseCase = disconnectWebSocketUseCase,
+            playAudioFileUseCase = playAudioFileUseCase,
+            updateWebSocketChannelUseCase = updateWebSocketChannelUseCase
         )
         
         presenter.start()

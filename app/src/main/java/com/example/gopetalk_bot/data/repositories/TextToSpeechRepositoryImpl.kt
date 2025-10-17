@@ -4,9 +4,6 @@ import android.speech.tts.UtteranceProgressListener
 import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSource
 import com.example.gopetalk_bot.domain.repositories.TextToSpeechRepository
 
-/**
- * Implementation of TextToSpeechRepository
- */
 class TextToSpeechRepositoryImpl(
     private val ttsDataSource: TextToSpeechDataSource
 ) : TextToSpeechRepository {

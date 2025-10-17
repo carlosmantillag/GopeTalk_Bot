@@ -5,9 +5,6 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -18,9 +15,6 @@ import kotlin.concurrent.thread
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-/**
- * Local data source for audio recording and monitoring
- */
 class AudioDataSource(
     private val context: Context
 ) {
@@ -42,8 +36,6 @@ class AudioDataSource(
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
     private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    
-    // Audio detection thresholds
     private val silenceThresholdDb = 70f
     private val silenceTimeoutMs = 2000L
     private var lastSoundTime = 0L
@@ -92,7 +84,6 @@ class AudioDataSource(
                 val rmsDb = calculateRmsDb(data, read)
                 onAudioLevel(AudioLevelData(rmsDb))
 
-                // Skip processing if paused (e.g., during TTS playback)
                 if (isPaused) {
                     continue
                 }

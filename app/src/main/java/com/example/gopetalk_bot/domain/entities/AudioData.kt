@@ -2,7 +2,6 @@ package com.example.gopetalk_bot.domain.entities
 
 import java.io.File
 
-
 data class AudioData(
     val file: File,
     val sampleRate: Int,
@@ -10,7 +9,4 @@ data class AudioData(
     val format: AudioFormat
 )
 
-enum class AudioFormat {
-    PCM_16BIT,
-    PCM_8BIT
-}
+

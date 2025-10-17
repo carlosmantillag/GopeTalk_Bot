@@ -2,9 +2,6 @@ package com.example.gopetalk_bot.presentation.voiceinteraction
 
 import android.content.Context
 
-/**
- * Contract for Voice Interaction screen (MVP pattern)
- */
 interface VoiceInteractionContract {
     interface View {
         val context: Context
@@ -16,5 +13,6 @@ interface VoiceInteractionContract {
         fun start()
         fun stop()
         fun speakWelcome(username: String)
+        fun updateChannel(channel: String?)
     }
 }
