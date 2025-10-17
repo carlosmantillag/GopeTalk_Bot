@@ -101,12 +101,22 @@ class VoiceInteractionPresenter(
                             // speakTextUseCase.execute("Mensaje enviado", UUID.randomUUID().toString())
                             return@post
                         }
-                        try {
-                            val backendResponse = gson.fromJson(response.body, BackendResponse::class.java)
-                            handleBackendResponse(backendResponse)
-                        } catch (e: Exception) {
-                            view.logError("Failed to parse backend response", e)
-                            speakTextUseCase.execute("No entendí la respuesta del servidor.", UUID.randomUUID().toString())
+                        
+                        // Check if response is JSON or plain text
+                        val trimmedBody = response.body.trim()
+                        if (trimmedBody.startsWith("{") && trimmedBody.endsWith("}")) {
+                            // Response is JSON, parse it
+                            try {
+                                val backendResponse = gson.fromJson(response.body, BackendResponse::class.java)
+                                handleBackendResponse(backendResponse)
+                            } catch (e: Exception) {
+                                view.logError("Failed to parse backend JSON response", e)
+                                speakTextUseCase.execute("No entendí la respuesta del servidor.", UUID.randomUUID().toString())
+                            }
+                        } else {
+                            // Response is plain text, speak it directly
+                            view.logInfo("Speaking plain text response: $trimmedBody")
+                            speakTextUseCase.execute(trimmedBody, UUID.randomUUID().toString())
                         }
                     }
                     is ApiResponse.Error -> {
