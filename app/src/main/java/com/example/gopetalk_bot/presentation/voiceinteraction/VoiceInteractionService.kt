@@ -1,7 +1,6 @@
 package com.example.gopetalk_bot.presentation.voiceinteraction
 
 import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSource
-import VoiceInteractionPresenter
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager

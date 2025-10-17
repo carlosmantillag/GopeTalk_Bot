@@ -1,6 +1,10 @@
+package com.example.gopetalk_bot.presentation.voiceinteraction
+
+import android.os.Handler
 import android.os.Looper
 import com.example.gopetalk_bot.data.datasources.remote.dto.BackendResponse
 import com.example.gopetalk_bot.domain.entities.ApiResponse
+import com.example.gopetalk_bot.domain.entities.AudioData
 import com.example.gopetalk_bot.domain.usecases.GetRecordedAudioUseCase
 import com.example.gopetalk_bot.domain.usecases.MonitorAudioLevelUseCase
 import com.example.gopetalk_bot.domain.usecases.PauseAudioRecordingUseCase
@@ -18,13 +22,13 @@ import com.example.gopetalk_bot.domain.usecases.UpdateWebSocketChannelUseCase
 import com.example.gopetalk_bot.domain.repositories.WebSocketRepository
 import com.example.gopetalk_bot.domain.repositories.AudioPlayerRepository
 import com.example.gopetalk_bot.presentation.common.AudioRmsMonitor
-import com.example.gopetalk_bot.presentation.voiceinteraction.VoiceInteractionContract
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.UUID
 
 class VoiceInteractionPresenter(
@@ -47,7 +51,7 @@ class VoiceInteractionPresenter(
 ) : VoiceInteractionContract.Presenter {
 
     private val presenterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val mainThreadHandler = android.os.Handler(Looper.getMainLooper())
+    private val mainThreadHandler = Handler(Looper.getMainLooper())
     private val gson = Gson()
     
     @Volatile
@@ -97,7 +101,7 @@ class VoiceInteractionPresenter(
         }
     }
 
-    private fun sendAudioToBackend(audioData: com.example.gopetalk_bot.domain.entities.AudioData) {
+    private fun sendAudioToBackend(audioData: AudioData) {
         sendAudioCommandUseCase.execute(audioData, userId) { response ->
             mainThreadHandler.post {
                 when (response) {
@@ -193,7 +197,7 @@ class VoiceInteractionPresenter(
         })
     }
     
-    private fun playReceivedAudioFile(audioFile: java.io.File) {
+    private fun playReceivedAudioFile(audioFile: File) {
         view.logInfo("Playing received audio file from another user: ${audioFile.path}")
         playAudioFileUseCase.execute(audioFile, object : AudioPlayerRepository.PlaybackListener {
             override fun onPlaybackStarted() {
