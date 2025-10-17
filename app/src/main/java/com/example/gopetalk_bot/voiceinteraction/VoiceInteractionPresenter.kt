@@ -17,11 +17,6 @@ class VoiceInteractionPresenter(private val view: VoiceInteractionContract.View)
         // No specific cleanup needed for the presenter itself anymore
     }
 
-    override fun onHotwordDetected() {
-        view.logInfo("Starting command recording.")
-        view.startCommandRecording()
-    }
-
     override fun onSpeechEnded() {
         view.logInfo("Stopping command recording.")
         val audioFile = view.stopCommandRecording()

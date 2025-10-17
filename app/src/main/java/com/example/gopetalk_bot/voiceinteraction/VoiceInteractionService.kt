@@ -35,7 +35,6 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         textToSpeechManager = TextToSpeechManager(this) { error -> logError(error, null) }
 
         presenter.start()
-        presenter.onHotwordDetected()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

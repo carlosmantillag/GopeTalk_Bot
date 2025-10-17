@@ -14,7 +14,6 @@ interface VoiceInteractionContract {
     interface Presenter {
         fun start()
         fun stop()
-        fun onHotwordDetected()
         fun onSpeechEnded()
         fun onCommandAudioAvailable(audioFile: File)
     }
