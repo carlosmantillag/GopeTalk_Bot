@@ -1,11 +1,7 @@
 package com.example.gopetalk_bot.data.repositories
 
 import com.example.gopetalk_bot.data.datasources.local.UserPreferences
-
-interface UserRepository {
-    fun getUsername(): String
-    fun setUsername(username: String)
-}
+import com.example.gopetalk_bot.domain.repositories.UserRepository
 
 class UserRepositoryImpl constructor(
     private val userPreferences: UserPreferences

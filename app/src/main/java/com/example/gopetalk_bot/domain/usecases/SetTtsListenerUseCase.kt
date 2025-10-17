@@ -2,9 +2,6 @@ package com.example.gopetalk_bot.domain.usecases
 
 import com.example.gopetalk_bot.domain.repositories.TextToSpeechRepository
 
-/**
- * Use case for setting a listener on the TTS engine
- */
 class SetTtsListenerUseCase(
     private val textToSpeechRepository: TextToSpeechRepository
 ) {

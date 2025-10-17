@@ -6,9 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
-/**
- * Local data source for permission operations
- */
 class PermissionDataSource(
     private val context: Context
 ) {

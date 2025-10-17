@@ -9,9 +9,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
-/**
- * Implementation of AudioRepository
- */
 class AudioRepositoryImpl(
     private val audioDataSource: AudioDataSource
 ) : AudioRepository {

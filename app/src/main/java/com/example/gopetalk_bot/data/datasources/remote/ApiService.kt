@@ -13,5 +13,10 @@ interface ApiService {
     fun sendAudioCommand(
         @Header("X-User-ID") userId: String,
         @Part file: MultipartBody.Part
-    ): Call<String>
+    ): Call<okhttp3.ResponseBody>
+    
+    @retrofit2.http.GET
+    fun downloadAudioFile(
+        @retrofit2.http.Url fileUrl: String
+    ): Call<okhttp3.ResponseBody>
 }

@@ -4,9 +4,6 @@ import com.example.gopetalk_bot.data.datasources.local.PermissionDataSource
 import com.example.gopetalk_bot.domain.entities.PermissionStatus
 import com.example.gopetalk_bot.domain.repositories.PermissionRepository
 
-/**
- * Implementation of PermissionRepository
- */
 class PermissionRepositoryImpl(
     private val permissionDataSource: PermissionDataSource
 ) : PermissionRepository {

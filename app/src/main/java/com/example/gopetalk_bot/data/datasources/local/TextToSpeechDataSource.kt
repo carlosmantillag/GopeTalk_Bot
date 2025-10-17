@@ -6,9 +6,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
-/**
- * Local data source for Text-to-Speech operations
- */
 class TextToSpeechDataSource(
     context: Context,
     private val onInitError: (String) -> Unit

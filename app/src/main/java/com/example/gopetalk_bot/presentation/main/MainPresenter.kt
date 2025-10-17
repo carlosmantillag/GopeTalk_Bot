@@ -1,22 +1,18 @@
 package com.example.gopetalk_bot.presentation.main
 
+import com.example.gopetalk_bot.domain.repositories.UserRepository
 import com.example.gopetalk_bot.domain.usecases.CheckPermissionsUseCase
 
-/**
- * Presenter for Main screen following MVP + Clean Architecture
- */
 class MainPresenter(
     private val view: MainContract.View,
     private val checkPermissionsUseCase: CheckPermissionsUseCase,
-    private val userRepository: com.example.gopetalk_bot.data.repositories.UserRepository
+    private val userRepository: UserRepository
 ) : MainContract.Presenter {
 
     override fun onViewCreated() {
-        // Speak welcome message with username
         val username = userRepository.getUsername()
         view.speakWelcomeMessage(username)
         
-        // Check and request permissions
         val permissionStatus = checkPermissionsUseCase.execute()
         
         if (permissionStatus.allGranted) {

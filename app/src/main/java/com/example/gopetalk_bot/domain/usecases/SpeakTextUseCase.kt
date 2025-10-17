@@ -2,9 +2,6 @@ package com.example.gopetalk_bot.domain.usecases
 
 import com.example.gopetalk_bot.domain.repositories.TextToSpeechRepository
 
-/**
- * Use case for speaking text
- */
 class SpeakTextUseCase(
     private val textToSpeechRepository: TextToSpeechRepository
 ) {

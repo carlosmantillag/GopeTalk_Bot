@@ -40,9 +40,6 @@ import com.example.gopetalk_bot.presentation.voiceinteraction.VoiceInteractionSe
 import com.example.gopetalk_bot.ui.theme.GopeTalk_BotTheme
 import kotlin.random.Random
 
-/**
- * Main Activity following MVP + Clean Architecture
- */
 class MainActivity : ComponentActivity(), MainContract.View {
 
     private lateinit var presenter: MainContract.Presenter
@@ -56,12 +53,9 @@ class MainActivity : ComponentActivity(), MainContract.View {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Dependency injection (manual for now)
         val permissionDataSource = PermissionDataSource(this)
         val permissionRepository = PermissionRepositoryImpl(permissionDataSource)
         val checkPermissionsUseCase = CheckPermissionsUseCase(permissionRepository)
-        
-        // User related dependencies
         val userPreferences = UserPreferences(this)
         val userRepository = UserRepositoryImpl(userPreferences)
         
@@ -84,7 +78,6 @@ class MainActivity : ComponentActivity(), MainContract.View {
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Floating particles from bottom to top
                         repeat(50) { index ->
                             val infiniteTransition =
                                 rememberInfiniteTransition(label = "particle_animation_$index")
