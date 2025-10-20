@@ -60,8 +60,9 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         val audioDataSource = AudioDataSource(this)
         val audioRepository = AudioRepositoryImpl(audioDataSource)
         
+        val userPreferences = com.example.gopetalk_bot.data.datasources.local.UserPreferences(this)
         val remoteDataSource = RemoteDataSource()
-        val apiRepository = ApiRepositoryImpl(remoteDataSource)
+        val apiRepository = ApiRepositoryImpl(remoteDataSource, userPreferences)
 
         val ttsDataSource = TextToSpeechDataSource(this) { error ->
             logError("TTS Error: $error")

@@ -10,9 +10,7 @@ class MainPresenter(
 ) : MainContract.Presenter {
 
     override fun onViewCreated() {
-        val username = userRepository.getUsername()
-        view.speakWelcomeMessage(username)
-        
+        // User is already authenticated, just check permissions and start service
         val permissionStatus = checkPermissionsUseCase.execute()
         
         if (permissionStatus.allGranted) {

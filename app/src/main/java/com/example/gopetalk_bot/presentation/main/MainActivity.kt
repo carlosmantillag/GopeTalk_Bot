@@ -60,6 +60,8 @@ class MainActivity : ComponentActivity(), MainContract.View {
         val userRepository = UserRepositoryImpl(userPreferences)
         
         presenter = MainPresenter(this, checkPermissionsUseCase, userRepository)
+        
+        // Check permissions and start voice service
         presenter.onViewCreated()
 
         setContent {

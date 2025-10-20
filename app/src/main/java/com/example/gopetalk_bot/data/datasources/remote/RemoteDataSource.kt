@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import com.example.gopetalk_bot.data.datasources.remote.dto.AudioRelayResponse
+import com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationResponse
 import com.google.gson.Gson
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -58,8 +59,13 @@ class RemoteDataSource {
         fun onSuccess(audioFile: File)
         fun onFailure(e: IOException)
     }
+    
+    interface AuthCallback {
+        fun onSuccess(statusCode: Int, message: String, token: String)
+        fun onFailure(e: IOException)
+    }
 
-    fun sendAudioCommand(audioFile: File, userId: String, callback: ApiCallback) {
+    fun sendAudioCommand(audioFile: File, userId: String, authToken: String?, callback: ApiCallback) {
         if (!audioFile.exists()) {
             handler.post { 
                 callback.onFailure(IOException("Audio file does not exist: ${audioFile.path}")) 
@@ -75,9 +81,10 @@ class RemoteDataSource {
         Log.d(TAG, "Sending audio to backend via Retrofit")
         Log.d(TAG, "URL: ${baseUrl}audio/ingest")
         Log.d(TAG, "User-ID: $userId")
+        Log.d(TAG, "Auth-Token: ${authToken?.take(20)}...")
         Log.d(TAG, "File: ${audioFile.name} (${audioFile.length()} bytes)")
 
-        apiService.sendAudioCommand(userId, multipartBody).enqueue(object : Callback<ResponseBody> {
+        apiService.sendAudioCommand(userId, authToken, multipartBody).enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 Log.d(TAG, "Response received: ${response.code()}")
                 if (response.isSuccessful) {
@@ -179,6 +186,51 @@ class RemoteDataSource {
             override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
                 Log.e(TAG, "Download failed", t)
                 handler.post { callback.onFailure(IOException("Failed to download audio: ${t.message}", t)) }
+            }
+        })
+    }
+
+    fun sendAuthentication(nombre: String, pin: Int, callback: AuthCallback) {
+        val authRequest = com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationRequest(nombre, pin)
+        
+        Log.d(TAG, "Sending authentication to backend")
+        Log.d(TAG, "URL: ${baseUrl}auth")
+        Log.d(TAG, "Request JSON: ${gson.toJson(authRequest)}")
+        Log.d(TAG, "Nombre: $nombre, PIN: $pin")
+        
+        apiService.authenticate(authRequest).enqueue(object : Callback<ResponseBody> {
+            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+                Log.d(TAG, "Authentication response received: ${response.code()}")
+                if (response.isSuccessful) {
+                    val bodyString = response.body()?.string() ?: ""
+                    Log.d(TAG, "Authentication successful: $bodyString")
+                    
+                    try {
+                        val authResponse = gson.fromJson(bodyString, AuthenticationResponse::class.java)
+                        Log.d(TAG, "Parsed auth response - Message: ${authResponse.message}, Token: ${authResponse.token}")
+                        handler.post { 
+                            callback.onSuccess(response.code(), authResponse.message, authResponse.token) 
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing authentication response", e)
+                        handler.post { 
+                            callback.onFailure(IOException("Error parsing response: ${e.message}", e)) 
+                        }
+                    }
+                } else {
+                    val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                    Log.e(TAG, "Authentication error ${response.code()}: $errorBody")
+                    handler.post { 
+                        callback.onFailure(IOException("Authentication error ${response.code()}: $errorBody")) 
+                    }
+                }
+            }
+            
+            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                Log.e(TAG, "Authentication request failed", t)
+                handler.post { 
+                    callback.onFailure(IOException("Failed to authenticate: ${t.message}", t)) 
+                }
             }
         })
     }

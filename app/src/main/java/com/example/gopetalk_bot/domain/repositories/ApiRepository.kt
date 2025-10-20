@@ -9,4 +9,10 @@ interface ApiRepository {
         userId: String,
         callback: (ApiResponse) -> Unit
     )
+    
+    fun sendAuthentication(
+        nombre: String,
+        pin: Int,
+        callback: (ApiResponse) -> Unit
+    )
 }
