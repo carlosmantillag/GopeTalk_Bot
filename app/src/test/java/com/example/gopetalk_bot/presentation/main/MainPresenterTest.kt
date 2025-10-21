@@ -77,4 +77,60 @@ class MainPresenterTest {
         verify { view.showPermissionsRequiredError() }
         verify(exactly = 0) { view.startVoiceService() }
     }
+
+    @Test
+    fun `onViewCreated should handle empty permissions list`() {
+        val permissionStatus = PermissionStatus(
+            allGranted = true,
+            permissions = emptyList()
+        )
+        every { checkPermissionsUseCase.execute() } returns permissionStatus
+
+        presenter.onViewCreated()
+
+        verify { view.startVoiceService() }
+    }
+
+    @Test
+    fun `onViewCreated should handle multiple permissions`() {
+        val permissions = listOf(
+            "android.permission.RECORD_AUDIO",
+            "android.permission.INTERNET",
+            "android.permission.ACCESS_NETWORK_STATE"
+        )
+        val permissionStatus = PermissionStatus(
+            allGranted = false,
+            permissions = permissions
+        )
+        every { checkPermissionsUseCase.execute() } returns permissionStatus
+
+        presenter.onViewCreated()
+
+        verify { view.requestPermissions(permissions.toTypedArray()) }
+    }
+
+    @Test
+    fun `onPermissionsResult should handle multiple calls`() {
+        presenter.onPermissionsResult(allGranted = true)
+        presenter.onPermissionsResult(allGranted = false)
+        presenter.onPermissionsResult(allGranted = true)
+
+        verify(exactly = 2) { view.startVoiceService() }
+        verify(exactly = 1) { view.showPermissionsRequiredError() }
+    }
+
+    @Test
+    fun `onViewCreated should be idempotent`() {
+        val permissionStatus = PermissionStatus(
+            allGranted = true,
+            permissions = emptyList()
+        )
+        every { checkPermissionsUseCase.execute() } returns permissionStatus
+
+        presenter.onViewCreated()
+        presenter.onViewCreated()
+
+        verify(exactly = 2) { checkPermissionsUseCase.execute() }
+        verify(exactly = 2) { view.startVoiceService() }
+    }
 }
