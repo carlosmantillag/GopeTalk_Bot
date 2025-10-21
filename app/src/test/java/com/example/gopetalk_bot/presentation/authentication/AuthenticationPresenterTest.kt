@@ -5,6 +5,7 @@ import android.os.Looper
 import com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSource
 import com.example.gopetalk_bot.data.datasources.local.UserPreferences
 import com.example.gopetalk_bot.domain.entities.ApiResponse
+import com.example.gopetalk_bot.domain.entities.PermissionStatus
 import com.example.gopetalk_bot.domain.usecases.*
 import io.mockk.*
 import org.junit.After
@@ -20,6 +21,7 @@ class AuthenticationPresenterTest {
     private lateinit var setTtsListenerUseCase: SetTtsListenerUseCase
     private lateinit var shutdownTtsUseCase: ShutdownTtsUseCase
     private lateinit var userPreferences: UserPreferences
+    private lateinit var checkPermissionsUseCase: CheckPermissionsUseCase
     private lateinit var presenter: AuthenticationPresenter
 
     @Before
@@ -47,6 +49,7 @@ class AuthenticationPresenterTest {
         setTtsListenerUseCase = mockk(relaxed = true)
         shutdownTtsUseCase = mockk(relaxed = true)
         userPreferences = mockk(relaxed = true)
+        checkPermissionsUseCase = mockk(relaxed = true)
 
         presenter = AuthenticationPresenter(
             view,
@@ -55,7 +58,8 @@ class AuthenticationPresenterTest {
             speakTextUseCase,
             setTtsListenerUseCase,
             shutdownTtsUseCase,
-            userPreferences
+            userPreferences,
+            checkPermissionsUseCase
         )
     }
 
@@ -99,5 +103,49 @@ class AuthenticationPresenterTest {
         presenter.stop()
 
         verify { speechRecognizerDataSource.stopListening() }
+    }
+
+    @Test
+    fun `onViewCreated should start when all permissions granted`() {
+        val permissionStatus = PermissionStatus(
+            allGranted = true,
+            permissions = listOf("android.permission.RECORD_AUDIO")
+        )
+        every { checkPermissionsUseCase.execute() } returns permissionStatus
+
+        presenter.onViewCreated()
+
+        verify { setTtsListenerUseCase.execute(any(), any(), any()) }
+        verify(exactly = 0) { view.requestPermissions(any()) }
+    }
+
+    @Test
+    fun `onViewCreated should request permissions when not all granted`() {
+        val permissions = listOf("android.permission.RECORD_AUDIO")
+        val permissionStatus = PermissionStatus(
+            allGranted = false,
+            permissions = permissions
+        )
+        every { checkPermissionsUseCase.execute() } returns permissionStatus
+
+        presenter.onViewCreated()
+
+        verify { view.requestPermissions(permissions.toTypedArray()) }
+        verify(exactly = 0) { setTtsListenerUseCase.execute(any(), any(), any()) }
+    }
+
+    @Test
+    fun `onPermissionsResult should start when all granted`() {
+        presenter.onPermissionsResult(true)
+
+        verify { setTtsListenerUseCase.execute(any(), any(), any()) }
+    }
+
+    @Test
+    fun `onPermissionsResult should show error when not all granted`() {
+        presenter.onPermissionsResult(false)
+
+        verify { view.showPermissionsRequiredError() }
+        verify(exactly = 0) { setTtsListenerUseCase.execute(any(), any(), any()) }
     }
 }

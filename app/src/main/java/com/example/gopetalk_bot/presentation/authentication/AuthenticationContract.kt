@@ -9,10 +9,14 @@ interface AuthenticationContract {
         fun logError(message: String, t: Throwable? = null)
         fun navigateToMainActivity()
         fun showAuthenticationError(message: String)
+        fun requestPermissions(permissions: Array<String>)
+        fun showPermissionsRequiredError()
     }
 
     interface Presenter {
         fun start()
         fun stop()
+        fun onViewCreated()
+        fun onPermissionsResult(allGranted: Boolean)
     }
 }

@@ -16,14 +16,15 @@ class AuthenticationPresenter(
     private val speakTextUseCase: SpeakTextUseCase,
     private val setTtsListenerUseCase: SetTtsListenerUseCase,
     private val shutdownTtsUseCase: ShutdownTtsUseCase,
-    private val userPreferences: UserPreferences
+    private val userPreferences: UserPreferences,
+    private val checkPermissionsUseCase: CheckPermissionsUseCase
 ) : AuthenticationContract.Presenter {
 
     private companion object {
-        const val DELAY_AFTER_TTS = 1000L
-        const val DELAY_BEFORE_PIN = 2000L
-        const val DELAY_RETRY_LISTENING = 500L
-        const val DELAY_NAVIGATION = 2000L
+        const val DELAY_AFTER_TTS = 50L
+        const val DELAY_BEFORE_PIN = 50L
+        const val DELAY_RETRY_LISTENING = 50L
+        const val DELAY_NAVIGATION = 1000L
         const val PIN_LENGTH = 4
         
         const val MSG_WELCOME = "Bienvenido Usuario, ¿cuál es tu nombre?"
@@ -34,6 +35,9 @@ class AuthenticationPresenter(
         const val MSG_UNCLEAR = "No entendí, por favor di sí o no"
         const val MSG_RETRY = "No pude entender, por favor repite"
         const val MSG_AUTH_ERROR = "Error en la autenticación, por favor intenta de nuevo"
+        const val MSG_INVALID_CREDENTIALS = "Usuario ya registrado, PIN incorrecto"
+        
+        const val HTTP_UNAUTHORIZED = 401
     }
 
     private enum class AuthState {
@@ -50,6 +54,24 @@ class AuthenticationPresenter(
     private val mainThreadHandler = Handler(Looper.getMainLooper())
     private var isTtsSpeaking = false
     private val gson = Gson()
+
+    override fun onViewCreated() {
+        val permissionStatus = checkPermissionsUseCase.execute()
+        
+        if (permissionStatus.allGranted) {
+            start()
+        } else {
+            view.requestPermissions(permissionStatus.permissions.toTypedArray())
+        }
+    }
+
+    override fun onPermissionsResult(allGranted: Boolean) {
+        if (allGranted) {
+            start()
+        } else {
+            view.showPermissionsRequiredError()
+        }
+    }
 
     override fun start() {
         view.logInfo("Authentication Presenter started.")
@@ -239,7 +261,20 @@ class AuthenticationPresenter(
 
     private fun handleAuthError(response: ApiResponse.Error) {
         view.logError("Authentication failed: ${response.message}", response.exception)
-        showAuthErrorAndRetry()
+        
+        if (response.statusCode == HTTP_UNAUTHORIZED) {
+            showInvalidCredentialsError()
+        } else {
+            showAuthErrorAndRetry()
+        }
+    }
+
+    private fun showInvalidCredentialsError() {
+        view.showAuthenticationError(MSG_INVALID_CREDENTIALS)
+        speak(MSG_INVALID_CREDENTIALS, "auth_invalid_credentials")
+        mainThreadHandler.postDelayed({
+            retryPinInput()
+        }, DELAY_NAVIGATION)
     }
 
     private fun showAuthErrorAndRetry() {

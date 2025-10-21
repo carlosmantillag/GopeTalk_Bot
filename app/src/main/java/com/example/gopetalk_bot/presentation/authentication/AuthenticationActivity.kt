@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
@@ -37,9 +38,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSource
+import com.example.gopetalk_bot.data.datasources.local.PermissionDataSource
 import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSource
 import com.example.gopetalk_bot.data.repositories.ApiRepositoryImpl
+import com.example.gopetalk_bot.data.repositories.PermissionRepositoryImpl
 import com.example.gopetalk_bot.data.repositories.TextToSpeechRepositoryImpl
+import com.example.gopetalk_bot.domain.usecases.CheckPermissionsUseCase
 import com.example.gopetalk_bot.domain.usecases.SendAuthenticationUseCase
 import com.example.gopetalk_bot.domain.usecases.SetTtsListenerUseCase
 import com.example.gopetalk_bot.domain.usecases.ShutdownTtsUseCase
@@ -51,6 +55,12 @@ import kotlin.random.Random
 class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View {
 
     private lateinit var presenter: AuthenticationContract.Presenter
+
+    private val requestMultiplePermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        presenter.onPermissionsResult(permissions.entries.all { it.value })
+    }
 
     override val context: Context
         get() = this
@@ -64,6 +74,10 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
 
         val speechRecognizerDataSource = com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSource(this)
         val userPreferences = com.example.gopetalk_bot.data.datasources.local.UserPreferences(this)
+        
+        val permissionDataSource = PermissionDataSource(this)
+        val permissionRepository = PermissionRepositoryImpl(permissionDataSource)
+        val checkPermissionsUseCase = CheckPermissionsUseCase(permissionRepository)
         
         val remoteDataSource = RemoteDataSource()
         val apiRepository = ApiRepositoryImpl(remoteDataSource, userPreferences)
@@ -85,10 +99,11 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
             speakTextUseCase = speakTextUseCase,
             setTtsListenerUseCase = setTtsListenerUseCase,
             shutdownTtsUseCase = shutdownTtsUseCase,
-            userPreferences = userPreferences
+            userPreferences = userPreferences,
+            checkPermissionsUseCase = checkPermissionsUseCase
         )
 
-        presenter.start()
+        presenter.onViewCreated()
 
         setContent {
             GopeTalk_BotTheme {
@@ -198,6 +213,19 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
 
     override fun showAuthenticationError(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    override fun requestPermissions(permissions: Array<String>) {
+        requestMultiplePermissionsLauncher.launch(permissions)
+    }
+
+    override fun showPermissionsRequiredError() {
+        Toast.makeText(
+            this,
+            "Se requieren permisos de micrófono para continuar",
+            Toast.LENGTH_LONG
+        ).show()
+        finish()
     }
 
     override fun onDestroy() {

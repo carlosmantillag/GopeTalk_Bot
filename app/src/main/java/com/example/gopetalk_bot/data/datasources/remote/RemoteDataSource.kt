@@ -234,7 +234,7 @@ class RemoteDataSource {
 
         override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
             Log.e(TAG, "Authentication request failed", t)
-            postAuthFailure(callback, "Failed to authenticate: ${t.message}", t)
+            postAuthFailure(callback, "Failed to authenticate: ${t.message}", null, t)
         }
     }
 
@@ -247,19 +247,27 @@ class RemoteDataSource {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing authentication response", e)
-            postAuthFailure(callback, "Error parsing response: ${e.message}", e)
+            postAuthFailure(callback, "Error parsing response: ${e.message}", null, e)
         }
     }
 
     private fun handleAuthError(response: retrofit2.Response<ResponseBody>, callback: AuthCallback) {
         val errorBody = response.errorBody()?.string() ?: UNKNOWN
-        Log.e(TAG, "Authentication error ${response.code()}: $errorBody")
-        postAuthFailure(callback, "Authentication error ${response.code()}: $errorBody")
+        val statusCode = response.code()
+        Log.e(TAG, "Authentication error $statusCode: $errorBody")
+        postAuthFailure(callback, "Authentication error $statusCode: $errorBody", statusCode)
     }
 
-    private fun postAuthFailure(callback: AuthCallback, message: String, cause: Throwable? = null) {
-        handler.post { callback.onFailure(IOException(message, cause)) }
+    private fun postAuthFailure(callback: AuthCallback, message: String, statusCode: Int? = null, cause: Throwable? = null) {
+        val exception = if (statusCode != null) {
+            AuthenticationException(message, statusCode, cause)
+        } else {
+            IOException(message, cause)
+        }
+        handler.post { callback.onFailure(exception) }
     }
+    
+    class AuthenticationException(message: String, val statusCode: Int, cause: Throwable? = null) : IOException(message, cause)
 
     fun pollAudio(authToken: String?, callback: AudioPollCallback) {
         apiService.pollAudio(authToken).enqueue(createPollCallback(callback))

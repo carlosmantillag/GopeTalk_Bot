@@ -26,7 +26,7 @@ class ApiRepositoryImpl(
                 }
 
                 override fun onFailure(e: IOException) {
-                    callback(ApiResponse.Error(e.message ?: "Unknown error", e))
+                    callback(ApiResponse.Error(e.message ?: "Unknown error", null, e))
                 }
             }
         )
@@ -48,7 +48,8 @@ class ApiRepositoryImpl(
                 }
 
                 override fun onFailure(e: IOException) {
-                    callback(ApiResponse.Error(e.message ?: "Unknown error", e))
+                    val statusCode = (e as? RemoteDataSource.AuthenticationException)?.statusCode
+                    callback(ApiResponse.Error(e.message ?: "Unknown error", statusCode, e))
                 }
             }
         )
