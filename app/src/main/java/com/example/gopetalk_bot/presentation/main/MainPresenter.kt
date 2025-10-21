@@ -10,7 +10,6 @@ class MainPresenter(
 ) : MainContract.Presenter {
 
     override fun onViewCreated() {
-        // User is already authenticated, just check permissions and start service
         val permissionStatus = checkPermissionsUseCase.execute()
         
         if (permissionStatus.allGranted) {

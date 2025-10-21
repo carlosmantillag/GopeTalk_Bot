@@ -62,7 +62,6 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize dependencies
         val speechRecognizerDataSource = com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSource(this)
         val userPreferences = com.example.gopetalk_bot.data.datasources.local.UserPreferences(this)
         
@@ -107,7 +106,6 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Animated particles
                         repeat(50) { index ->
                             val infiniteTransition =
                                 rememberInfiniteTransition(label = "particle_animation_$index")
@@ -146,7 +144,6 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
                             )
                         }
 
-                        // Static sphere for authentication
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {

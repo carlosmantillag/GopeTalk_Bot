@@ -1,10 +1,6 @@
 package com.example.gopetalk_bot.presentation.voiceinteraction
 
-import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSource
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -12,117 +8,89 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.gopetalk_bot.R
-import com.example.gopetalk_bot.data.datasources.local.AudioDataSource
-import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSource
-import com.example.gopetalk_bot.data.datasources.local.AudioPlayerDataSource
-import com.example.gopetalk_bot.data.datasources.remote.WebSocketDataSource
-import com.example.gopetalk_bot.data.repositories.ApiRepositoryImpl
-import com.example.gopetalk_bot.data.repositories.AudioRepositoryImpl
-import com.example.gopetalk_bot.data.repositories.TextToSpeechRepositoryImpl
-import com.example.gopetalk_bot.data.repositories.WebSocketRepositoryImpl
-import com.example.gopetalk_bot.data.repositories.AudioPlayerRepositoryImpl
-import com.example.gopetalk_bot.domain.usecases.GetRecordedAudioUseCase
-import com.example.gopetalk_bot.domain.usecases.MonitorAudioLevelUseCase
-import com.example.gopetalk_bot.domain.usecases.PauseAudioRecordingUseCase
-import com.example.gopetalk_bot.domain.usecases.ResumeAudioRecordingUseCase
-import com.example.gopetalk_bot.domain.usecases.SendAudioCommandUseCase
-import com.example.gopetalk_bot.domain.usecases.SpeakTextUseCase
-import com.example.gopetalk_bot.domain.usecases.SetTtsListenerUseCase
-import com.example.gopetalk_bot.domain.usecases.ShutdownTtsUseCase
-import com.example.gopetalk_bot.domain.usecases.StartAudioMonitoringUseCase
-import com.example.gopetalk_bot.domain.usecases.StopAudioMonitoringUseCase
-import com.example.gopetalk_bot.domain.usecases.ConnectWebSocketUseCase
-import com.example.gopetalk_bot.domain.usecases.DisconnectWebSocketUseCase
-import com.example.gopetalk_bot.domain.usecases.PlayAudioFileUseCase
-import com.example.gopetalk_bot.domain.usecases.UpdateWebSocketChannelUseCase
-import com.example.gopetalk_bot.domain.usecases.PollAudioUseCase
+import com.example.gopetalk_bot.data.datasources.local.*
+import com.example.gopetalk_bot.data.datasources.remote.*
+import com.example.gopetalk_bot.data.repositories.*
+import com.example.gopetalk_bot.domain.usecases.*
 
 class VoiceInteractionService : Service(), VoiceInteractionContract.View {
-
-    private lateinit var presenter: VoiceInteractionContract.Presenter
-
-    override val context: Context
-        get() = this
 
     companion object {
         private const val TAG = "VoiceInteractionService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "VoiceInteractionChannel"
+        private const val CHANNEL_NAME = "Voice Interaction Service"
+        private const val NOTIFICATION_TITLE = "GopeTalk Bot Activo"
+        private const val NOTIFICATION_TEXT = "Escuchando..."
         const val ACTION_SPEAK_WELCOME = "com.example.gopetalk_bot.ACTION_SPEAK_WELCOME"
         const val EXTRA_USERNAME = "username"
+        private const val DEFAULT_USERNAME = "usuario"
     }
+
+    private lateinit var presenter: VoiceInteractionContract.Presenter
+
+    override val context: Context get() = this
 
     override fun onCreate() {
         super.onCreate()
-        
         setupNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
-        
-        val audioDataSource = AudioDataSource(this)
-        val audioRepository = AudioRepositoryImpl(audioDataSource)
-        
-        val userPreferences = com.example.gopetalk_bot.data.datasources.local.UserPreferences(this)
-        val remoteDataSource = RemoteDataSource()
-        val apiRepository = ApiRepositoryImpl(remoteDataSource, userPreferences)
-
-        val ttsDataSource = TextToSpeechDataSource(this) { error ->
-            logError("TTS Error: $error")
-        }
-        val ttsRepository = TextToSpeechRepositoryImpl(ttsDataSource)
-
-        val startAudioMonitoringUseCase = StartAudioMonitoringUseCase(audioRepository)
-        val stopAudioMonitoringUseCase = StopAudioMonitoringUseCase(audioRepository)
-        val pauseAudioRecordingUseCase = PauseAudioRecordingUseCase(audioRepository)
-        val resumeAudioRecordingUseCase = ResumeAudioRecordingUseCase(audioRepository)
-        val monitorAudioLevelUseCase = MonitorAudioLevelUseCase(audioRepository)
-        val getRecordedAudioUseCase = GetRecordedAudioUseCase(audioRepository)
-        val sendAudioCommandUseCase = SendAudioCommandUseCase(apiRepository)
-        val speakTextUseCase = SpeakTextUseCase(ttsRepository)
-        val setTtsListenerUseCase = SetTtsListenerUseCase(ttsRepository)
-        val shutdownTtsUseCase = ShutdownTtsUseCase(ttsRepository)
-        val webSocketDataSource = WebSocketDataSource()
-        val webSocketRepository = WebSocketRepositoryImpl(webSocketDataSource)
-        val connectWebSocketUseCase = ConnectWebSocketUseCase(webSocketRepository)
-        val disconnectWebSocketUseCase = DisconnectWebSocketUseCase(webSocketRepository)
-        val updateWebSocketChannelUseCase = UpdateWebSocketChannelUseCase(webSocketRepository)
-        val audioPlayerDataSource = AudioPlayerDataSource()
-        val audioPlayerRepository = AudioPlayerRepositoryImpl(audioPlayerDataSource)
-        val playAudioFileUseCase = PlayAudioFileUseCase(audioPlayerRepository)
-        val pollAudioUseCase = PollAudioUseCase(apiRepository)
-
-        presenter = VoiceInteractionPresenter(
-            view = this,
-            startAudioMonitoringUseCase = startAudioMonitoringUseCase,
-            stopAudioMonitoringUseCase = stopAudioMonitoringUseCase,
-            pauseAudioRecordingUseCase = pauseAudioRecordingUseCase,
-            resumeAudioRecordingUseCase = resumeAudioRecordingUseCase,
-            monitorAudioLevelUseCase = monitorAudioLevelUseCase,
-            getRecordedAudioUseCase = getRecordedAudioUseCase,
-            sendAudioCommandUseCase = sendAudioCommandUseCase,
-            speakTextUseCase = speakTextUseCase,
-            setTtsListenerUseCase = setTtsListenerUseCase,
-            shutdownTtsUseCase = shutdownTtsUseCase,
-            connectWebSocketUseCase = connectWebSocketUseCase,
-            disconnectWebSocketUseCase = disconnectWebSocketUseCase,
-            playAudioFileUseCase = playAudioFileUseCase,
-            updateWebSocketChannelUseCase = updateWebSocketChannelUseCase,
-            pollAudioUseCase = pollAudioUseCase,
-            userPreferences = userPreferences
-        )
-        
+        initializePresenter()
         presenter.start()
     }
 
+    private fun initializePresenter() {
+        val userPreferences = UserPreferences(this)
+        val audioRepository = createAudioRepository()
+        val apiRepository = createApiRepository(userPreferences)
+        val ttsRepository = createTtsRepository()
+        val webSocketRepository = createWebSocketRepository()
+        val audioPlayerRepository = createAudioPlayerRepository()
+
+        presenter = VoiceInteractionPresenter(
+            view = this,
+            startAudioMonitoringUseCase = StartAudioMonitoringUseCase(audioRepository),
+            stopAudioMonitoringUseCase = StopAudioMonitoringUseCase(audioRepository),
+            pauseAudioRecordingUseCase = PauseAudioRecordingUseCase(audioRepository),
+            resumeAudioRecordingUseCase = ResumeAudioRecordingUseCase(audioRepository),
+            monitorAudioLevelUseCase = MonitorAudioLevelUseCase(audioRepository),
+            getRecordedAudioUseCase = GetRecordedAudioUseCase(audioRepository),
+            sendAudioCommandUseCase = SendAudioCommandUseCase(apiRepository),
+            speakTextUseCase = SpeakTextUseCase(ttsRepository),
+            setTtsListenerUseCase = SetTtsListenerUseCase(ttsRepository),
+            shutdownTtsUseCase = ShutdownTtsUseCase(ttsRepository),
+            connectWebSocketUseCase = ConnectWebSocketUseCase(webSocketRepository),
+            disconnectWebSocketUseCase = DisconnectWebSocketUseCase(webSocketRepository),
+            playAudioFileUseCase = PlayAudioFileUseCase(audioPlayerRepository),
+            updateWebSocketChannelUseCase = UpdateWebSocketChannelUseCase(webSocketRepository),
+            pollAudioUseCase = PollAudioUseCase(apiRepository),
+            userPreferences = userPreferences
+        )
+    }
+
+    private fun createAudioRepository() = AudioRepositoryImpl(AudioDataSource(this))
+
+    private fun createApiRepository(userPreferences: UserPreferences) = 
+        ApiRepositoryImpl(RemoteDataSource(), userPreferences)
+
+    private fun createTtsRepository() = TextToSpeechRepositoryImpl(
+        TextToSpeechDataSource(this) { error -> logError("TTS Error: $error") }
+    )
+
+    private fun createWebSocketRepository() = WebSocketRepositoryImpl(WebSocketDataSource())
+
+    private fun createAudioPlayerRepository() = AudioPlayerRepositoryImpl(AudioPlayerDataSource())
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.let {
-            when (it.action) {
-                ACTION_SPEAK_WELCOME -> {
-                    val username = it.getStringExtra(EXTRA_USERNAME) ?: "usuario"
-                    presenter.speakWelcome(username)
-                }
-            }
-        }
+        handleIntent(intent)
         return START_STICKY
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.action == ACTION_SPEAK_WELCOME) {
+            val username = intent.getStringExtra(EXTRA_USERNAME) ?: DEFAULT_USERNAME
+            presenter.speakWelcome(username)
+        }
     }
 
     override fun logInfo(message: String) {
@@ -130,27 +98,19 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
     }
 
     override fun logError(message: String, t: Throwable?) {
-        if (t != null) {
-            Log.e(TAG, message, t)
-        } else {
-            Log.e(TAG, message)
-        }
+        if (t != null) Log.e(TAG, message, t) else Log.e(TAG, message)
     }
 
     private fun setupNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Voice Interaction Service",
-                NotificationManager.IMPORTANCE_LOW
-            )
+            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
     private fun createNotification(): Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle("GopeTalk Bot Activo")
-        .setContentText("Escuchando...")
+        .setContentTitle(NOTIFICATION_TITLE)
+        .setContentText(NOTIFICATION_TEXT)
         .setSmallIcon(R.mipmap.ic_launcher)
         .build()
 

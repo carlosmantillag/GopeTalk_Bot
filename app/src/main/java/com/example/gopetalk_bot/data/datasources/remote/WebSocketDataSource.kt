@@ -1,21 +1,31 @@
 package com.example.gopetalk_bot.data.datasources.remote
 
 import android.util.Log
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
+import okhttp3.*
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class WebSocketDataSource {
+    
+    private companion object {
+        const val TAG = "WebSocketDataSource"
+        const val CONNECT_TIMEOUT = 10L
+        const val CLOSE_CODE_NORMAL = 1000
+        const val CLOSE_REASON = "Client disconnecting"
+        const val ACTION_START = "START"
+        const val ACTION_STOP = "STOP"
+        const val JSON_KEY_ACTION = "action"
+        const val JSON_KEY_TYPE = "type"
+        const val JSON_KEY_AUTH_TOKEN = "authToken"
+        const val JSON_KEY_CHANNEL = "channel"
+    }
+
     private var webSocket: WebSocket? = null
     private var listener: MicrophoneControlListener? = null
     
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.MINUTES) // No timeout for WebSocket
+        .connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MINUTES)
         .build()
 
     interface MicrophoneControlListener {
@@ -28,158 +38,94 @@ class WebSocketDataSource {
 
     fun connect(url: String, authToken: String?, channel: String?, listener: MicrophoneControlListener) {
         this.listener = listener
+        val request = Request.Builder().url(url).build()
+        webSocket = client.newWebSocket(request, createWebSocketListener(authToken, channel, listener))
+    }
+
+    private fun createWebSocketListener(
+        authToken: String?,
+        channel: String?,
+        listener: MicrophoneControlListener
+    ) = object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) {
+            Log.d(TAG, "WebSocket connection opened")
+            sendHandshake(webSocket, authToken, channel)
+            listener.onConnectionEstablished()
+        }
+
+        override fun onMessage(webSocket: WebSocket, text: String) {
+            handleMessage(text, listener)
+        }
+
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            webSocket.close(CLOSE_CODE_NORMAL, null)
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            listener.onConnectionClosed()
+        }
+
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            Log.e(TAG, "WebSocket error", t)
+            listener.onError(t.message ?: "Unknown WebSocket error")
+        }
+    }
+
+    private fun sendHandshake(webSocket: WebSocket, authToken: String?, channel: String?) {
+        val handshake = createHandshakeJson(authToken, channel)
+        webSocket.send(handshake.toString())
+    }
+
+    private fun createHandshakeJson(authToken: String?, channel: String?) = JSONObject().apply {
+        if (!authToken.isNullOrBlank()) put(JSON_KEY_AUTH_TOKEN, authToken)
+        if (!channel.isNullOrBlank()) put(JSON_KEY_CHANNEL, channel)
+    }
+
+    private fun handleMessage(text: String, listener: MicrophoneControlListener) {
+        try {
+            if (text.trim().startsWith("{")) {
+                handleJsonMessage(text, listener)
+            } else {
+                handlePlainTextMessage(text, listener)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing message", e)
+            handlePlainTextMessage(text, listener)
+        }
+    }
+
+    private fun handleJsonMessage(text: String, listener: MicrophoneControlListener) {
+        val json = JSONObject(text)
+        val command = json.optString(JSON_KEY_ACTION).ifEmpty { 
+            json.optString(JSON_KEY_TYPE) 
+        }.uppercase()
         
-        val request = Request.Builder()
-            .url(url)
-            .build()
+        handleCommand(command, listener)
+    }
 
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(TAG, "WebSocket connection opened")
-                
-                // Send handshake
-                val handshake = JSONObject().apply {
-                    if (!authToken.isNullOrBlank()) {
-                        put("authToken", authToken)
-                    }
-                    if (!channel.isNullOrBlank()) {
-                        put("channel", channel)
-                    }
-                }
-                val handshakeStr = handshake.toString()
-                Log.d(TAG, "Sending handshake: $handshakeStr")
-                webSocket.send(handshakeStr)
-                
-                listener.onConnectionEstablished()
-            }
+    private fun handlePlainTextMessage(text: String, listener: MicrophoneControlListener) {
+        handleCommand(text.trim().uppercase(), listener)
+    }
 
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.d(TAG, "WebSocket message received: $text")
-                
-                try {
-                    // Try to parse as JSON first
-                    if (text.trim().startsWith("{")) {
-                        val json = JSONObject(text)
-                        
-                        // Check for action field
-                        if (json.has("action")) {
-                            val action = json.getString("action").uppercase()
-                            Log.d(TAG, "JSON action received: $action")
-                            
-                            when (action) {
-                                "START" -> {
-                                    Log.d(TAG, "Microphone START signal received (JSON)")
-                                    listener.onMicrophoneStart()
-                                    return
-                                }
-                                "STOP" -> {
-                                    Log.d(TAG, "Microphone STOP signal received (JSON)")
-                                    listener.onMicrophoneStop()
-                                    return
-                                }
-                            }
-                        }
-                        
-                        // Check for type field (alternative format)
-                        if (json.has("type")) {
-                            val type = json.getString("type").uppercase()
-                            Log.d(TAG, "JSON type received: $type")
-                            
-                            when (type) {
-                                "START" -> {
-                                    Log.d(TAG, "Microphone START signal received (JSON type)")
-                                    listener.onMicrophoneStart()
-                                    return
-                                }
-                                "STOP" -> {
-                                    Log.d(TAG, "Microphone STOP signal received (JSON type)")
-                                    listener.onMicrophoneStop()
-                                    return
-                                }
-                            }
-                        }
-                        
-                        Log.d(TAG, "JSON message without recognized action/type: $text")
-                    } else {
-                        // Handle simple text messages (START/STOP)
-                        when (text.trim().uppercase()) {
-                            "START" -> {
-                                Log.d(TAG, "Microphone START signal received (plain text)")
-                                listener.onMicrophoneStart()
-                                return
-                            }
-                            "STOP" -> {
-                                Log.d(TAG, "Microphone STOP signal received (plain text)")
-                                listener.onMicrophoneStop()
-                                return
-                            }
-                        }
-                    }
-                    
-                    Log.w(TAG, "Unknown WebSocket message: $text")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing WebSocket message: $text", e)
-                    
-                    // Fallback to simple text parsing
-                    when (text.trim().uppercase()) {
-                        "START" -> {
-                            Log.d(TAG, "Microphone START signal received (fallback)")
-                            listener.onMicrophoneStart()
-                        }
-                        "STOP" -> {
-                            Log.d(TAG, "Microphone STOP signal received (fallback)")
-                            listener.onMicrophoneStop()
-                        }
-                        else -> {
-                            Log.w(TAG, "Unknown WebSocket message after fallback: $text")
-                        }
-                    }
-                }
-            }
-
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket closing: $code / $reason")
-                webSocket.close(1000, null)
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket closed: $code / $reason")
-                listener.onConnectionClosed()
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket error", t)
-                listener.onError(t.message ?: "Unknown WebSocket error")
-            }
-        })
+    private fun handleCommand(command: String, listener: MicrophoneControlListener) {
+        when (command) {
+            ACTION_START -> listener.onMicrophoneStart()
+            ACTION_STOP -> listener.onMicrophoneStop()
+            else -> Log.w(TAG, "Unknown command: $command")
+        }
     }
 
     fun disconnect() {
-        webSocket?.close(1000, "Client disconnecting")
+        webSocket?.close(CLOSE_CODE_NORMAL, CLOSE_REASON)
         webSocket = null
     }
     
     fun updateChannel(authToken: String?, channel: String?) {
         webSocket?.let { ws ->
-            val update = JSONObject().apply {
-                if (!authToken.isNullOrBlank()) {
-                    put("authToken", authToken)
-                }
-                if (!channel.isNullOrBlank()) {
-                    put("channel", channel)
-                }
-            }
-            val updateStr = update.toString()
-            Log.d(TAG, "Updating channel: $updateStr")
-            ws.send(updateStr)
+            val update = createHandshakeJson(authToken, channel)
+            ws.send(update.toString())
         } ?: Log.w(TAG, "Cannot update channel: WebSocket not connected")
     }
 
-    fun isConnected(): Boolean {
-        return webSocket != null
-    }
-
-    companion object {
-        private const val TAG = "WebSocketDataSource"
-    }
+    fun isConnected(): Boolean = webSocket != null
 }

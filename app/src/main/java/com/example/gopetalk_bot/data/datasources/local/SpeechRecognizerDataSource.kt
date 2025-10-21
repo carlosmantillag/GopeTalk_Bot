@@ -45,13 +45,9 @@ class SpeechRecognizerDataSource(
                 Log.d(TAG, "Beginning of speech")
             }
 
-            override fun onRmsChanged(rmsdB: Float) {
-                // Audio level changed
-            }
+            override fun onRmsChanged(rmsdB: Float) {}
 
-            override fun onBufferReceived(buffer: ByteArray?) {
-                // Buffer received
-            }
+            override fun onBufferReceived(buffer: ByteArray?) {}
 
             override fun onEndOfSpeech() {
                 Log.d(TAG, "End of speech")
@@ -88,13 +84,9 @@ class SpeechRecognizerDataSource(
                 }
             }
 
-            override fun onPartialResults(partialResults: Bundle?) {
-                // Partial results
-            }
+            override fun onPartialResults(partialResults: Bundle?) {}
 
-            override fun onEvent(eventType: Int, params: Bundle?) {
-                // Event occurred
-            }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
         }
 
         speechRecognizer?.setRecognitionListener(recognitionListener)

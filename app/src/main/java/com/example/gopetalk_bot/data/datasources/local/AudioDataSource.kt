@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -15,30 +16,34 @@ import kotlin.concurrent.thread
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-class AudioDataSource(
-    private val context: Context
-) {
+class AudioDataSource(private val context: Context) {
+
+    private companion object {
+        const val TAG = "AudioDataSource"
+        const val SAMPLE_RATE = 16000
+        const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+        const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+        const val SILENCE_THRESHOLD_DB = 70f
+        const val SILENCE_TIMEOUT_MS = 2000L
+        const val WAV_HEADER_SIZE = 44
+        const val AUDIO_FILENAME = "command.wav"
+        const val THREAD_JOIN_TIMEOUT = 500L
+        const val MIN_RMS = 1.0
+        const val RMS_DB_MULTIPLIER = 20
+        const val BITS_PER_SAMPLE = 16
+        const val CHANNELS = 1
+    }
+
     private var audioRecord: AudioRecord? = null
     private var recordingThread: Thread? = null
     private var audioFile: File? = null
     
-    @Volatile
-    private var isMonitoring = false
-    
-    @Volatile
-    private var isRecording = false
-    
-    @Volatile
-    private var isPaused = false
+    @Volatile private var isMonitoring = false
+    @Volatile private var isRecording = false
+    @Volatile private var isPaused = false
+    @Volatile private var lastSoundTime = 0L
 
-    private val audioSource = MediaRecorder.AudioSource.MIC
-    private val sampleRate = 16000
-    private val channelConfig = AudioFormat.CHANNEL_IN_MONO
-    private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    private val silenceThresholdDb = 70f
-    private val silenceTimeoutMs = 2000L
-    private var lastSoundTime = 0L
+    private val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
 
     data class AudioLevelData(val rmsDb: Float)
     data class RecordedAudioData(val file: File)
@@ -51,21 +56,42 @@ class AudioDataSource(
         if (isMonitoring) return
         
         try {
-            audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                onError("AudioRecord could not be initialized.", null)
-                return
-            }
-
-            isMonitoring = true
-            audioRecord?.startRecording()
-            Log.d(TAG, "Started audio monitoring.")
-
-            recordingThread = thread {
-                monitorAudio(onAudioLevel, onRecordingStopped, onError)
-            }
+            initializeAudioRecord(onError) ?: return
+            startRecordingThread(onAudioLevel, onRecordingStopped, onError)
         } catch (e: SecurityException) {
             onError("Audio recording permission not granted.", e)
+        }
+    }
+
+    @RequiresPermission("android.permission.RECORD_AUDIO")
+    private fun initializeAudioRecord(onError: (String, Throwable?) -> Unit): AudioRecord? {
+        audioRecord = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            SAMPLE_RATE,
+            CHANNEL_CONFIG,
+            AUDIO_FORMAT,
+            bufferSize
+        )
+        
+        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+            onError("AudioRecord could not be initialized.", null)
+            return null
+        }
+        
+        return audioRecord
+    }
+
+    private fun startRecordingThread(
+        onAudioLevel: (AudioLevelData) -> Unit,
+        onRecordingStopped: (RecordedAudioData) -> Unit,
+        onError: (String, Throwable?) -> Unit
+    ) {
+        isMonitoring = true
+        audioRecord?.startRecording()
+        Log.d(TAG, "Started audio monitoring.")
+
+        recordingThread = thread {
+            monitorAudio(onAudioLevel, onRecordingStopped, onError)
         }
     }
 
@@ -84,30 +110,10 @@ class AudioDataSource(
                 val rmsDb = calculateRmsDb(data, read)
                 onAudioLevel(AudioLevelData(rmsDb))
 
-                if (isPaused) {
-                    continue
-                }
-
-                if (rmsDb > silenceThresholdDb) {
-                    lastSoundTime = System.currentTimeMillis()
-                    if (!isRecording) {
-                        isRecording = true
-                        Log.d(TAG, "Sound detected, starting recording.")
-                        audioFile = File(context.cacheDir, "command.wav")
-                        fos = FileOutputStream(audioFile)
-                        fos.write(ByteArray(44)) // WAV header placeholder
-                    }
-                }
-
-                if (isRecording) {
-                    fos?.write(data, 0, read)
-                    totalBytesRead += read
-
-                    if (System.currentTimeMillis() - lastSoundTime > silenceTimeoutMs) {
-                        Log.d(TAG, "Silence detected, stopping recording.")
-                        stopRecordingAndFinalize(fos, totalBytesRead, onRecordingStopped, onError)
-                        totalBytesRead = 0
-                    }
+                if (!isPaused) {
+                    val result = processAudioData(data, read, rmsDb, fos, totalBytesRead, onRecordingStopped, onError)
+                    fos = result.first
+                    totalBytesRead = result.second
                 }
             }
         }
@@ -115,6 +121,54 @@ class AudioDataSource(
         if (isRecording) {
             stopRecordingAndFinalize(fos, totalBytesRead, onRecordingStopped, onError)
         }
+    }
+
+    private fun processAudioData(
+        data: ByteArray,
+        read: Int,
+        rmsDb: Float,
+        fos: FileOutputStream?,
+        totalBytesRead: Int,
+        onRecordingStopped: (RecordedAudioData) -> Unit,
+        onError: (String, Throwable?) -> Unit
+    ): Pair<FileOutputStream?, Int> {
+        var outputStream = fos
+        var bytesRead = totalBytesRead
+
+        if (isSoundDetected(rmsDb)) {
+            lastSoundTime = System.currentTimeMillis()
+            if (!isRecording) {
+                outputStream = startNewRecording()
+            }
+        }
+
+        if (isRecording) {
+            outputStream?.write(data, 0, read)
+            bytesRead += read
+
+            if (isSilenceDetected()) {
+                Log.d(TAG, "Silence detected, stopping recording.")
+                stopRecordingAndFinalize(outputStream, bytesRead, onRecordingStopped, onError)
+                return Pair(null, 0)
+            }
+        }
+
+        return Pair(outputStream, bytesRead)
+    }
+
+    private fun isSoundDetected(rmsDb: Float): Boolean = rmsDb > SILENCE_THRESHOLD_DB
+
+    private fun isSilenceDetected(): Boolean {
+        return System.currentTimeMillis() - lastSoundTime > SILENCE_TIMEOUT_MS
+    }
+
+    private fun startNewRecording(): FileOutputStream {
+        isRecording = true
+        Log.d(TAG, "Sound detected, starting recording.")
+        audioFile = File(context.cacheDir, AUDIO_FILENAME)
+        val fos = FileOutputStream(audioFile)
+        fos.write(ByteArray(WAV_HEADER_SIZE))
+        return fos
     }
 
     private fun stopRecordingAndFinalize(
@@ -145,19 +199,34 @@ class AudioDataSource(
 
         val sumOfSquares = shortData.sumOf { it.toDouble() * it.toDouble() }
         val rms = sqrt(sumOfSquares / shortData.size)
-
-        val clampedRms = if (rms > 0) rms else 1.0
-        val db = 20 * log10(clampedRms)
-        return db.toFloat()
+        val clampedRms = if (rms > 0) rms else MIN_RMS
+        
+        return (RMS_DB_MULTIPLIER * log10(clampedRms)).toFloat()
     }
 
     @Throws(IOException::class)
     private fun writeWavHeader(file: File, totalAudioLen: Int) {
         val totalDataLen = totalAudioLen + 36
-        val channels = 1
-        val byteRate = (sampleRate * 16 * channels / 8).toLong()
+        val byteRate = (SAMPLE_RATE * BITS_PER_SAMPLE * CHANNELS / 8).toLong()
+        val header = createWavHeader(totalDataLen, totalAudioLen, byteRate)
 
-        val header = ByteArray(44)
+        RandomAccessFile(file, "rw").use {
+            it.seek(0)
+            it.write(header)
+        }
+    }
+
+    private fun createWavHeader(totalDataLen: Int, totalAudioLen: Int, byteRate: Long): ByteArray {
+        val header = ByteArray(WAV_HEADER_SIZE)
+        
+        writeRiffHeader(header, totalDataLen)
+        writeFmtChunk(header, byteRate)
+        writeDataChunk(header, totalAudioLen)
+        
+        return header
+    }
+
+    private fun writeRiffHeader(header: ByteArray, totalDataLen: Int) {
         header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte()
         header[2] = 'F'.code.toByte(); header[3] = 'F'.code.toByte()
         header[4] = (totalDataLen and 0xff).toByte()
@@ -166,26 +235,27 @@ class AudioDataSource(
         header[7] = (totalDataLen shr 24 and 0xff).toByte()
         header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte()
         header[10] = 'V'.code.toByte(); header[11] = 'E'.code.toByte()
+    }
+
+    private fun writeFmtChunk(header: ByteArray, byteRate: Long) {
         header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte()
         header[14] = 't'.code.toByte(); header[15] = ' '.code.toByte()
         header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0
         header[20] = 1; header[21] = 0
-        header[22] = channels.toByte(); header[23] = 0
-        ByteBuffer.wrap(header, 24, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleRate)
+        header[22] = CHANNELS.toByte(); header[23] = 0
+        ByteBuffer.wrap(header, 24, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(SAMPLE_RATE)
         ByteBuffer.wrap(header, 28, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(byteRate.toInt())
-        header[32] = (2 * 16 / 8).toByte(); header[33] = 0
-        header[34] = 16; header[35] = 0
+        header[32] = (2 * BITS_PER_SAMPLE / 8).toByte(); header[33] = 0
+        header[34] = BITS_PER_SAMPLE.toByte(); header[35] = 0
+    }
+
+    private fun writeDataChunk(header: ByteArray, totalAudioLen: Int) {
         header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte()
         header[38] = 't'.code.toByte(); header[39] = 'a'.code.toByte()
         header[40] = (totalAudioLen and 0xff).toByte()
         header[41] = (totalAudioLen shr 8 and 0xff).toByte()
         header[42] = (totalAudioLen shr 16 and 0xff).toByte()
         header[43] = (totalAudioLen shr 24 and 0xff).toByte()
-
-        RandomAccessFile(file, "rw").use {
-            it.seek(0)
-            it.write(header)
-        }
     }
 
     fun pauseRecording() {
@@ -203,24 +273,22 @@ class AudioDataSource(
 
         isMonitoring = false
         try {
-            recordingThread?.join(500)
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
-            recordingThread = null
+            recordingThread?.join(THREAD_JOIN_TIMEOUT)
+            cleanupAudioRecord()
             Log.d(TAG, "Stopped audio monitoring.")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping AudioRecord.", e)
         }
     }
 
-    fun release() {
-        if (isMonitoring) {
-            stopMonitoring()
-        }
+    private fun cleanupAudioRecord() {
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
+        recordingThread = null
     }
 
-    companion object {
-        private const val TAG = "AudioDataSource"
+    fun release() {
+        if (isMonitoring) stopMonitoring()
     }
 }

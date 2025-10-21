@@ -1,40 +1,50 @@
 package com.example.gopetalk_bot.data.datasources.remote
 
-import com.example.gopetalk_bot.BuildConfig
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.util.Log
-import com.example.gopetalk_bot.data.datasources.remote.dto.AudioRelayResponse
-import com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationResponse
+import com.example.gopetalk_bot.BuildConfig
+import com.example.gopetalk_bot.data.datasources.remote.dto.*
 import com.google.gson.Gson
+import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.asRequestBody
-import java.io.File
-import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
-import java.util.concurrent.TimeUnit
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
-import retrofit2.Retrofit
+import retrofit2.*
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 class RemoteDataSource {
+    
+    private companion object {
+        const val TAG = "RemoteDataSource"
+        const val CONNECT_TIMEOUT = 30L
+        const val READ_TIMEOUT = 60L
+        const val WRITE_TIMEOUT = 60L
+        const val HTTP_OK = 200
+        const val HTTP_NO_CONTENT = 204
+        const val AUDIO_MIME_TYPE = "audio/wav"
+        const val TEMP_AUDIO_PREFIX = "received_audio_"
+        const val TEMP_POLLED_AUDIO_PREFIX = "polled_audio_"
+        const val AUDIO_EXTENSION = ".wav"
+        const val HEADER_AUDIO_FROM = "X-Audio-From"
+        const val HEADER_CHANNEL = "X-Channel"
+        const val UNKNOWN = "unknown"
+    }
+
     private val handler = Handler(Looper.getMainLooper())
     private val gson = Gson()
     private val baseUrl = "http://${BuildConfig.BACKEND_HOST}/"
+    
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        })
+        .connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
+        .readTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
+        .writeTimeout(WRITE_TIMEOUT, TimeUnit.SECONDS)
+        .addInterceptor(createLoggingInterceptor())
         .build()
     
     private val retrofit: Retrofit by lazy {
@@ -48,6 +58,10 @@ class RemoteDataSource {
     
     private val apiService: ApiService by lazy { 
         retrofit.create(ApiService::class.java) 
+    }
+
+    private fun createLoggingInterceptor() = HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY
     }
 
     interface ApiCallback {
@@ -73,221 +87,224 @@ class RemoteDataSource {
 
     fun sendAudioCommand(audioFile: File, authToken: String?, callback: ApiCallback) {
         if (!audioFile.exists()) {
-            handler.post { 
-                callback.onFailure(IOException("Audio file does not exist: ${audioFile.path}")) 
-            }
+            postFailure(callback, "Audio file does not exist: ${audioFile.path}")
             return
         }
 
         val multipartBody = createMultipartBody(audioFile) ?: run {
-            handler.post { callback.onFailure(IOException("Failed to read audio file")) }
+            postFailure(callback, "Failed to read audio file")
             return
         }
 
-        Log.d(TAG, "Sending audio to backend via Retrofit")
-        Log.d(TAG, "URL: ${baseUrl}audio/ingest")
+        logAudioRequest(audioFile, authToken)
+        apiService.sendAudioCommand(authToken, multipartBody).enqueue(createAudioCallback(callback))
+    }
+
+    private fun logAudioRequest(audioFile: File, authToken: String?) {
+        Log.d(TAG, "Sending audio: ${audioFile.name} (${audioFile.length()} bytes)")
         Log.d(TAG, "Auth-Token: ${authToken?.take(20)}...")
-        Log.d(TAG, "File: ${audioFile.name} (${audioFile.length()} bytes)")
+    }
 
-        apiService.sendAudioCommand( authToken, multipartBody).enqueue(object : Callback<ResponseBody> {
-            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
-                Log.d(TAG, "Response received: ${response.code()}")
-                if (response.isSuccessful) {
-                    response.body()?.let { responseBody ->
-                        val contentType = responseBody.contentType()
-                        Log.d(TAG, "Content-Type: $contentType")
-                        val bodyString = responseBody.string()
-                        
-                        // Check if response is JSON with audioBase64
-                        if (contentType?.toString()?.contains("application/json") == true && bodyString.contains("audioBase64")) {
-                            try {
-                                val audioRelay = gson.fromJson(bodyString, AudioRelayResponse::class.java)
-                                Log.d(TAG, "Audio relay response: channel=${audioRelay.channel}, recipients=${audioRelay.recipients.size}")
-                                
-                                // Decode base64 to WAV file
-                                val audioBytes = Base64.decode(audioRelay.audioBase64, Base64.DEFAULT)
-                                val tempFile = File.createTempFile("received_audio_", ".wav")
-                                tempFile.writeBytes(audioBytes)
-                                
-                                Log.d(TAG, "Audio file decoded and saved: ${tempFile.path}")
-                                handler.post { callback.onSuccess(response.code(), bodyString, tempFile) }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error decoding audio relay response", e)
-                                handler.post { callback.onFailure(IOException("Error decoding audio: ${e.message}", e)) }
-                            }
-                        } else {
-                            // Text response (commands, etc.)
-                            Log.d(TAG, "Text response: $bodyString")
-                            handler.post { callback.onSuccess(response.code(), bodyString, null) }
-                        }
-                    } ?: run {
-                        handler.post { callback.onSuccess(response.code(), "", null) }
-                    }
-                } else {
-                    val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                    Log.e(TAG, "Backend error ${response.code()}: $errorBody")
-                    handler.post { 
-                        callback.onFailure(IOException("Backend error ${response.code()}: $errorBody")) 
-                    }
-                }
+    private fun createAudioCallback(callback: ApiCallback) = object : retrofit2.Callback<ResponseBody> {
+        override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
+            if (response.isSuccessful) {
+                handleSuccessfulAudioResponse(response, callback)
+            } else {
+                handleErrorResponse(response, callback)
             }
+        }
 
-            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                Log.e(TAG, "Retrofit error", t)
-                handler.post { 
-                    callback.onFailure(IOException("Failed to send audio: ${t.message}", t)) 
-                }
+        override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
+            Log.e(TAG, "Retrofit error", t)
+            postFailure(callback, "Failed to send audio: ${t.message}", t)
+        }
+    }
+
+    private fun handleSuccessfulAudioResponse(response: retrofit2.Response<ResponseBody>, callback: ApiCallback) {
+        response.body()?.let { responseBody ->
+            val bodyString = responseBody.string()
+            
+            if (isAudioRelayResponse(responseBody.contentType(), bodyString)) {
+                handleAudioRelayResponse(bodyString, response.code(), callback)
+            } else {
+                handler.post { callback.onSuccess(response.code(), bodyString, null) }
             }
-        })
+        } ?: handler.post { callback.onSuccess(response.code(), "", null) }
+    }
+
+    private fun isAudioRelayResponse(contentType: MediaType?, body: String): Boolean {
+        return contentType?.toString()?.contains("application/json") == true && body.contains("audioBase64")
+    }
+
+    private fun handleAudioRelayResponse(bodyString: String, statusCode: Int, callback: ApiCallback) {
+        try {
+            val audioRelay = gson.fromJson(bodyString, AudioRelayResponse::class.java)
+            val audioBytes = Base64.decode(audioRelay.audioBase64, Base64.DEFAULT)
+            val tempFile = File.createTempFile(TEMP_AUDIO_PREFIX, AUDIO_EXTENSION)
+            tempFile.writeBytes(audioBytes)
+            
+            handler.post { callback.onSuccess(statusCode, bodyString, tempFile) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error decoding audio relay response", e)
+            postFailure(callback, "Error decoding audio: ${e.message}", e)
+        }
     }
 
     private fun createMultipartBody(audioFile: File): MultipartBody.Part? = try {
-        val requestBody = audioFile.asRequestBody("audio/wav".toMediaTypeOrNull())
+        val requestBody = audioFile.asRequestBody(AUDIO_MIME_TYPE.toMediaTypeOrNull())
         MultipartBody.Part.createFormData("file", audioFile.name, requestBody)
     } catch (e: Exception) {
         Log.e(TAG, "Error creating multipart body", e)
         null
     }
+
+    private fun postFailure(callback: ApiCallback, message: String, cause: Throwable? = null) {
+        handler.post { callback.onFailure(IOException(message, cause)) }
+    }
+
+    private fun handleErrorResponse(response: retrofit2.Response<ResponseBody>, callback: ApiCallback) {
+        val errorBody = response.errorBody()?.string() ?: UNKNOWN
+        Log.e(TAG, "Backend error ${response.code()}: $errorBody")
+        postFailure(callback, "Backend error ${response.code()}: $errorBody")
+    }
     
     fun downloadAudioFile(fileUrl: String, outputFile: File, callback: AudioDownloadCallback) {
-        Log.d(TAG, "Downloading audio file from: $fileUrl")
+        val fullUrl = buildFullUrl(fileUrl)
+        Log.d(TAG, "Downloading audio from: $fullUrl")
         
-        val fullUrl = if (fileUrl.startsWith("http")) {
-            fileUrl
-        } else {
-            "$baseUrl$fileUrl"
-        }
-        
-        apiService.downloadAudioFile(fullUrl).enqueue(object : Callback<ResponseBody> {
-            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+        apiService.downloadAudioFile(fullUrl).enqueue(createDownloadCallback(outputFile, callback))
+    }
+
+    private fun buildFullUrl(fileUrl: String): String {
+        return if (fileUrl.startsWith("http")) fileUrl else "$baseUrl$fileUrl"
+    }
+
+    private fun createDownloadCallback(outputFile: File, callback: AudioDownloadCallback) = 
+        object : retrofit2.Callback<ResponseBody> {
+            override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
                 if (response.isSuccessful) {
-                    response.body()?.let { body ->
-                        try {
-                            val inputStream = body.byteStream()
-                            val outputStream = outputFile.outputStream()
-                            
-                            inputStream.use { input ->
-                                outputStream.use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            
-                            Log.d(TAG, "Audio file downloaded successfully: ${outputFile.path}")
-                            handler.post { callback.onSuccess(outputFile) }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error saving audio file", e)
-                            handler.post { callback.onFailure(IOException("Error saving audio file: ${e.message}", e)) }
-                        }
-                    } ?: run {
-                        handler.post { callback.onFailure(IOException("Empty response body")) }
-                    }
+                    response.body()?.let { saveAudioFile(it, outputFile, callback) }
+                        ?: postDownloadFailure(callback, "Empty response body")
                 } else {
-                    val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                    val errorBody = response.errorBody()?.string() ?: UNKNOWN
                     Log.e(TAG, "Download error ${response.code()}: $errorBody")
-                    handler.post { callback.onFailure(IOException("Download error ${response.code()}: $errorBody")) }
+                    postDownloadFailure(callback, "Download error ${response.code()}: $errorBody")
                 }
             }
             
-            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+            override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
                 Log.e(TAG, "Download failed", t)
-                handler.post { callback.onFailure(IOException("Failed to download audio: ${t.message}", t)) }
+                postDownloadFailure(callback, "Failed to download audio: ${t.message}", t)
             }
-        })
+        }
+
+    private fun saveAudioFile(body: ResponseBody, outputFile: File, callback: AudioDownloadCallback) {
+        try {
+            body.byteStream().use { input ->
+                outputFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            handler.post { callback.onSuccess(outputFile) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving audio file", e)
+            postDownloadFailure(callback, "Error saving audio file: ${e.message}", e)
+        }
+    }
+
+    private fun postDownloadFailure(callback: AudioDownloadCallback, message: String, cause: Throwable? = null) {
+        handler.post { callback.onFailure(IOException(message, cause)) }
     }
 
     fun sendAuthentication(nombre: String, pin: Int, callback: AuthCallback) {
-        val authRequest = com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationRequest(nombre, pin)
+        val authRequest = AuthenticationRequest(nombre, pin)
+        Log.d(TAG, "Authenticating: $nombre")
 
-        Log.d(TAG, "Sending authentication to backend")
-        Log.d(TAG, "URL: ${baseUrl}auth")
-        Log.d(TAG, "Request JSON: ${gson.toJson(authRequest)}")
-        Log.d(TAG, "Nombre: $nombre, PIN: $pin")
+        apiService.authenticate(authRequest).enqueue(createAuthCallback(callback))
+    }
 
-        apiService.authenticate(authRequest).enqueue(object : Callback<ResponseBody> {
-            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
-                Log.d(TAG, "Authentication response received: ${response.code()}")
-                if (response.isSuccessful) {
-                    val bodyString = response.body()?.string() ?: ""
-                    Log.d(TAG, "Authentication successful: $bodyString")
-
-                    try {
-                        val authResponse = gson.fromJson(bodyString, AuthenticationResponse::class.java)
-                        Log.d(TAG, "Parsed auth response - Message: ${authResponse.message}, Token: ${authResponse.token}")
-                        handler.post {
-                            callback.onSuccess(response.code(), authResponse.message, authResponse.token)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error parsing authentication response", e)
-                        handler.post {
-                            callback.onFailure(IOException("Error parsing response: ${e.message}", e))
-                        }
-                    }
-                } else {
-                    val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                    Log.e(TAG, "Authentication error ${response.code()}: $errorBody")
-                    handler.post {
-                        callback.onFailure(IOException("Authentication error ${response.code()}: $errorBody"))
-                    }
-                }
+    private fun createAuthCallback(callback: AuthCallback) = object : retrofit2.Callback<ResponseBody> {
+        override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
+            if (response.isSuccessful) {
+                handleAuthSuccess(response, callback)
+            } else {
+                handleAuthError(response, callback)
             }
+        }
 
-            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                Log.e(TAG, "Authentication request failed", t)
-                handler.post {
-                    callback.onFailure(IOException("Failed to authenticate: ${t.message}", t))
-                }
+        override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
+            Log.e(TAG, "Authentication request failed", t)
+            postAuthFailure(callback, "Failed to authenticate: ${t.message}", t)
+        }
+    }
+
+    private fun handleAuthSuccess(response: retrofit2.Response<ResponseBody>, callback: AuthCallback) {
+        val bodyString = response.body()?.string() ?: ""
+        try {
+            val authResponse = gson.fromJson(bodyString, AuthenticationResponse::class.java)
+            handler.post {
+                callback.onSuccess(response.code(), authResponse.message, authResponse.token)
             }
-        })
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing authentication response", e)
+            postAuthFailure(callback, "Error parsing response: ${e.message}", e)
+        }
+    }
+
+    private fun handleAuthError(response: retrofit2.Response<ResponseBody>, callback: AuthCallback) {
+        val errorBody = response.errorBody()?.string() ?: UNKNOWN
+        Log.e(TAG, "Authentication error ${response.code()}: $errorBody")
+        postAuthFailure(callback, "Authentication error ${response.code()}: $errorBody")
+    }
+
+    private fun postAuthFailure(callback: AuthCallback, message: String, cause: Throwable? = null) {
+        handler.post { callback.onFailure(IOException(message, cause)) }
     }
 
     fun pollAudio(authToken: String?, callback: AudioPollCallback) {
-        Log.d(TAG, "Polling audio with authToken: ${authToken?.take(20)}...")
-
-        apiService.pollAudio(authToken).enqueue(object : Callback<ResponseBody> {
-            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
-                when (response.code()) {
-                    200 -> {
-                        // Audio received
-                        response.body()?.let { body ->
-                            try {
-                                val audioBytes = body.bytes()
-                                val tempFile = File.createTempFile("polled_audio_", ".wav")
-                                tempFile.writeBytes(audioBytes)
-
-                                val fromUserId = response.headers()["X-Audio-From"] ?: "unknown"
-                                val channel = response.headers()["X-Channel"] ?: "unknown"
-
-                                Log.d(TAG, "Audio received via polling from user $fromUserId in channel $channel (${audioBytes.size} bytes)")
-                                handler.post { callback.onAudioReceived(tempFile, fromUserId, channel) }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error processing polled audio", e)
-                                handler.post { callback.onFailure(IOException("Error processing audio: ${e.message}", e)) }
-                            }
-                        } ?: run {
-                            handler.post { callback.onFailure(IOException("Empty response body")) }
-                        }
-                    }
-                    204 -> {
-                        // No audio pending
-                        Log.d(TAG, "No audio pending")
-                        handler.post { callback.onNoAudio() }
-                    }
-                    else -> {
-                        val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                        Log.e(TAG, "Polling error ${response.code()}: $errorBody")
-                        handler.post { callback.onFailure(IOException("Polling error ${response.code()}: $errorBody")) }
-                    }
-                }
-            }
-
-            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                Log.e(TAG, "Polling failed", t)
-                handler.post { callback.onFailure(IOException("Failed to poll audio: ${t.message}", t)) }
-            }
-        })
+        apiService.pollAudio(authToken).enqueue(createPollCallback(callback))
     }
 
-    companion object {
-        private const val TAG = "RemoteDataSource"
+    private fun createPollCallback(callback: AudioPollCallback) = object : retrofit2.Callback<ResponseBody> {
+        override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
+            when (response.code()) {
+                HTTP_OK -> handlePolledAudio(response, callback)
+                HTTP_NO_CONTENT -> handler.post { callback.onNoAudio() }
+                else -> handlePollError(response, callback)
+            }
+        }
+
+        override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
+            Log.e(TAG, "Polling failed", t)
+            postPollFailure(callback, "Failed to poll audio: ${t.message}", t)
+        }
+    }
+
+    private fun handlePolledAudio(response: retrofit2.Response<ResponseBody>, callback: AudioPollCallback) {
+        response.body()?.let { body ->
+            try {
+                val audioBytes = body.bytes()
+                val tempFile = File.createTempFile(TEMP_POLLED_AUDIO_PREFIX, AUDIO_EXTENSION)
+                tempFile.writeBytes(audioBytes)
+
+                val fromUserId = response.headers()[HEADER_AUDIO_FROM] ?: UNKNOWN
+                val channel = response.headers()[HEADER_CHANNEL] ?: UNKNOWN
+
+                handler.post { callback.onAudioReceived(tempFile, fromUserId, channel) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing polled audio", e)
+                postPollFailure(callback, "Error processing audio: ${e.message}", e)
+            }
+        } ?: postPollFailure(callback, "Empty response body")
+    }
+
+    private fun handlePollError(response: retrofit2.Response<ResponseBody>, callback: AudioPollCallback) {
+        val errorBody = response.errorBody()?.string() ?: UNKNOWN
+        Log.e(TAG, "Polling error ${response.code()}: $errorBody")
+        postPollFailure(callback, "Polling error ${response.code()}: $errorBody")
+    }
+
+    private fun postPollFailure(callback: AudioPollCallback, message: String, cause: Throwable? = null) {
+        handler.post { callback.onFailure(IOException(message, cause)) }
     }
 }

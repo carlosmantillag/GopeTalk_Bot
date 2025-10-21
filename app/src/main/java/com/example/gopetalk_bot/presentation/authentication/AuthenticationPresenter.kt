@@ -6,10 +6,7 @@ import com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSourc
 import com.example.gopetalk_bot.data.datasources.local.UserPreferences
 import com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationResponse
 import com.example.gopetalk_bot.domain.entities.ApiResponse
-import com.example.gopetalk_bot.domain.usecases.SendAuthenticationUseCase
-import com.example.gopetalk_bot.domain.usecases.SetTtsListenerUseCase
-import com.example.gopetalk_bot.domain.usecases.ShutdownTtsUseCase
-import com.example.gopetalk_bot.domain.usecases.SpeakTextUseCase
+import com.example.gopetalk_bot.domain.usecases.*
 import com.google.gson.Gson
 
 class AuthenticationPresenter(
@@ -21,6 +18,23 @@ class AuthenticationPresenter(
     private val shutdownTtsUseCase: ShutdownTtsUseCase,
     private val userPreferences: UserPreferences
 ) : AuthenticationContract.Presenter {
+
+    private companion object {
+        const val DELAY_AFTER_TTS = 1000L
+        const val DELAY_BEFORE_PIN = 2000L
+        const val DELAY_RETRY_LISTENING = 500L
+        const val DELAY_NAVIGATION = 2000L
+        const val PIN_LENGTH = 4
+        
+        const val MSG_WELCOME = "Bienvenido Usuario, ¿cuál es tu nombre?"
+        const val MSG_WELCOME_NAME = "Bienvenido"
+        const val MSG_ASK_PIN = "Dame un PIN de 4 dígitos por favor para poder entrar, no lo olvides"
+        const val MSG_CONFIRM_PIN = "El PIN es %d, ¿me confirmas?"
+        const val MSG_INVALID_PIN = "El PIN debe ser de 4 dígitos numéricos. Por favor, repite el PIN"
+        const val MSG_UNCLEAR = "No entendí, por favor di sí o no"
+        const val MSG_RETRY = "No pude entender, por favor repite"
+        const val MSG_AUTH_ERROR = "Error en la autenticación, por favor intenta de nuevo"
+    }
 
     private enum class AuthState {
         WAITING_FOR_NAME,
@@ -39,146 +53,147 @@ class AuthenticationPresenter(
 
     override fun start() {
         view.logInfo("Authentication Presenter started.")
-        
-        setTtsListenerUseCase.execute(
-            onStart = {
-                view.logInfo("TTS started. Stopping speech recognition.")
-                isTtsSpeaking = true
-                // Stop listening while TTS is speaking to avoid self-listening
-                speechRecognizerDataSource.stopListening()
-            },
-            onDone = {
-                view.logInfo("TTS finished. Starting speech recognition.")
-                isTtsSpeaking = false
-                // Start listening after TTS finishes with a delay
-                mainThreadHandler.postDelayed({
-                    if (!isTtsSpeaking) {
-                        startListening()
-                    }
-                }, 1000)
-            },
-            onError = {
-                view.logError("TTS error.", null)
-                isTtsSpeaking = false
-            }
-        )
-        
-        // Start authentication flow
+        setupTtsListeners()
         startAuthenticationFlow()
+    }
+
+    private fun setupTtsListeners() {
+        setTtsListenerUseCase.execute(
+            onStart = { handleTtsStart() },
+            onDone = { handleTtsDone() },
+            onError = { handleTtsError() }
+        )
+    }
+
+    private fun handleTtsStart() {
+        isTtsSpeaking = true
+        speechRecognizerDataSource.stopListening()
+    }
+
+    private fun handleTtsDone() {
+        isTtsSpeaking = false
+        mainThreadHandler.postDelayed({
+            if (!isTtsSpeaking) startListening()
+        }, DELAY_AFTER_TTS)
+    }
+
+    private fun handleTtsError() {
+        view.logError("TTS error.", null)
+        isTtsSpeaking = false
     }
     
     private fun startAuthenticationFlow() {
         authState = AuthState.WAITING_FOR_NAME
         view.logInfo("Starting authentication flow")
-        speakTextUseCase.execute("Bienvenido Usuario, ¿cuál es tu nombre?", "auth_ask_name")
+        speak(MSG_WELCOME, "auth_ask_name")
+    }
+
+    private fun speak(text: String, utteranceId: String) {
+        speakTextUseCase.execute(text, utteranceId)
     }
     
     private fun startListening() {
-        if (isTtsSpeaking) {
-            view.logInfo("TTS is speaking, skipping speech recognition")
-            return
-        }
+        if (isTtsSpeaking) return
         
         view.logInfo("Starting speech recognition for state: $authState")
         speechRecognizerDataSource.startListening(
-            onResult = { recognizedText ->
-                view.logInfo("Speech recognized: $recognizedText")
-                // Stop listening immediately after getting result
-                speechRecognizerDataSource.stopListening()
-                handleAuthenticationResponse(recognizedText)
-            },
-            onError = { error ->
-                view.logError("Speech recognition error: $error", null)
-                // Only retry if it's not a "no match" or "speech timeout" error
-                if (!error.contains("No match") && !error.contains("No speech")) {
-                    speakTextUseCase.execute("No pude entender, por favor repite", "auth_error")
-                } else {
-                    // Retry listening
-                    mainThreadHandler.postDelayed({
-                        if (!isTtsSpeaking) {
-                            startListening()
-                        }
-                    }, 500)
-                }
-            }
+            onResult = { handleSpeechResult(it) },
+            onError = { handleSpeechError(it) }
         )
+    }
+
+    private fun handleSpeechResult(recognizedText: String) {
+        view.logInfo("Speech recognized: $recognizedText")
+        speechRecognizerDataSource.stopListening()
+        handleAuthenticationResponse(recognizedText)
+    }
+
+    private fun handleSpeechError(error: String) {
+        view.logError("Speech recognition error: $error", null)
+        if (shouldRetryListening(error)) {
+            retryListening()
+        } else {
+            speak(MSG_RETRY, "auth_error")
+        }
+    }
+
+    private fun shouldRetryListening(error: String): Boolean {
+        return error.contains("No match") || error.contains("No speech")
+    }
+
+    private fun retryListening() {
+        mainThreadHandler.postDelayed({
+            if (!isTtsSpeaking) startListening()
+        }, DELAY_RETRY_LISTENING)
     }
     
     private fun handleAuthenticationResponse(transcription: String) {
         when (authState) {
-            AuthState.WAITING_FOR_NAME -> {
-                if (transcription.isNotBlank()) {
-                    userName = transcription
-                    view.logInfo("User name captured: $userName")
-                    speakTextUseCase.execute("Bienvenido $userName", "auth_welcome_name")
-                    
-                    // Wait a bit before asking for PIN
-                    mainThreadHandler.postDelayed({
-                        authState = AuthState.WAITING_FOR_PIN
-                        speakTextUseCase.execute(
-                            "Dame un PIN de 4 dígitos por favor para poder entrar, no lo olvides",
-                            "auth_ask_pin"
-                        )
-                    }, 2000)
-                }
-            }
-            
-            AuthState.WAITING_FOR_PIN -> {
-                if (transcription.isNotBlank()) {
-                    // Convert words to numbers and validate
-                    val pinString = convertWordsToNumbers(transcription)
-                    view.logInfo("PIN captured (original): $transcription")
-                    view.logInfo("PIN captured (converted): $pinString")
-                    
-                    // Validate that PIN is numeric and has 4 digits
-                    val pinInt = pinString.toIntOrNull()
-                    if (pinInt != null && pinString.length == 4) {
-                        userPin = pinInt
-                        authState = AuthState.WAITING_FOR_PIN_CONFIRMATION
-                        speakTextUseCase.execute(
-                            "El PIN es $userPin, ¿me confirmas?",
-                            "auth_confirm_pin"
-                        )
-                    } else {
-                        view.logError("Invalid PIN format: $pinString", null)
-                        speakTextUseCase.execute(
-                            "El PIN debe ser de 4 dígitos numéricos. Por favor, repite el PIN",
-                            "auth_invalid_pin"
-                        )
-                    }
-                }
-            }
-            
-            AuthState.WAITING_FOR_PIN_CONFIRMATION -> {
-                val response = transcription.lowercase()
-                view.logInfo("Confirmation response: $response")
-                
-                if (response.contains("sí") || response.contains("si") || response.contains("yes") || 
-                    response.contains("correcto") || response.contains("afirmativo")) {
-                    // User confirmed, send authentication
-                    sendAuthentication()
-                } else if (response.contains("no")) {
-                    // User rejected, ask for PIN again
-                    view.logInfo("User rejected PIN, asking again")
-                    authState = AuthState.WAITING_FOR_PIN
-                    speakTextUseCase.execute(
-                        "Dame un PIN de 4 dígitos por favor para poder entrar, no lo olvides",
-                        "auth_ask_pin_retry"
-                    )
-                } else {
-                    // Unclear response, ask again
-                    speakTextUseCase.execute(
-                        "No entendí, por favor di sí o no",
-                        "auth_unclear"
-                    )
-                }
-            }
-            
-            AuthState.AUTHENTICATED -> {
-                // Already authenticated, this shouldn't happen
-                view.logInfo("Already authenticated, ignoring")
-            }
+            AuthState.WAITING_FOR_NAME -> handleNameInput(transcription)
+            AuthState.WAITING_FOR_PIN -> handlePinInput(transcription)
+            AuthState.WAITING_FOR_PIN_CONFIRMATION -> handlePinConfirmation(transcription)
+            AuthState.AUTHENTICATED -> view.logInfo("Already authenticated, ignoring")
         }
+    }
+
+    private fun handleNameInput(name: String) {
+        if (name.isBlank()) return
+        
+        userName = name
+        view.logInfo("User name captured: $userName")
+        speak("$MSG_WELCOME_NAME $userName", "auth_welcome_name")
+        
+        mainThreadHandler.postDelayed({
+            authState = AuthState.WAITING_FOR_PIN
+            speak(MSG_ASK_PIN, "auth_ask_pin")
+        }, DELAY_BEFORE_PIN)
+    }
+
+    private fun handlePinInput(transcription: String) {
+        if (transcription.isBlank()) return
+        
+        val pinString = convertWordsToNumbers(transcription)
+        view.logInfo("PIN captured: $transcription -> $pinString")
+        
+        if (isValidPin(pinString)) {
+            userPin = pinString.toInt()
+            authState = AuthState.WAITING_FOR_PIN_CONFIRMATION
+            speak(String.format(MSG_CONFIRM_PIN, userPin), "auth_confirm_pin")
+        } else {
+            view.logError("Invalid PIN format: $pinString", null)
+            speak(MSG_INVALID_PIN, "auth_invalid_pin")
+        }
+    }
+
+    private fun isValidPin(pin: String): Boolean {
+        return pin.toIntOrNull() != null && pin.length == PIN_LENGTH
+    }
+
+    private fun handlePinConfirmation(response: String) {
+        val lowerResponse = response.lowercase()
+        view.logInfo("Confirmation response: $lowerResponse")
+        
+        when {
+            isConfirmation(lowerResponse) -> sendAuthentication()
+            isRejection(lowerResponse) -> retryPinInput()
+            else -> speak(MSG_UNCLEAR, "auth_unclear")
+        }
+    }
+
+    private fun isConfirmation(response: String): Boolean {
+        return response.contains("sí") || response.contains("si") || 
+               response.contains("yes") || response.contains("correcto") || 
+               response.contains("afirmativo")
+    }
+
+    private fun isRejection(response: String): Boolean {
+        return response.contains("no")
+    }
+
+    private fun retryPinInput() {
+        view.logInfo("User rejected PIN, asking again")
+        authState = AuthState.WAITING_FOR_PIN
+        speak(MSG_ASK_PIN, "auth_ask_pin_retry")
     }
     
     private fun sendAuthentication() {
@@ -190,57 +205,49 @@ class AuthenticationPresenter(
         sendAuthenticationUseCase.execute(name, pin) { response ->
             mainThreadHandler.post {
                 when (response) {
-                    is ApiResponse.Success -> {
-                        view.logInfo("Authentication successful: ${response.body}")
-                        
-                        try {
-                            // Parse the response to extract message and token
-                            val authResponse = gson.fromJson(response.body, AuthenticationResponse::class.java)
-                            
-                            // Save the token
-                            userPreferences.authToken = authResponse.token
-                            userPreferences.username = name
-                            view.logInfo("Token saved: ${authResponse.token}")
-                            
-                            authState = AuthState.AUTHENTICATED
-                            
-                            // Speak only the message from the backend
-                            speakTextUseCase.execute(
-                                authResponse.message,
-                                "auth_success"
-                            )
-                            
-                            // Navigate to main activity after successful authentication
-                            mainThreadHandler.postDelayed({
-                                view.navigateToMainActivity()
-                            }, 2000)
-                        } catch (e: Exception) {
-                            view.logError("Error parsing auth response: ${e.message}", e)
-                            view.showAuthenticationError("Error procesando respuesta")
-                            speakTextUseCase.execute(
-                                "Error en la autenticación, por favor intenta de nuevo",
-                                "auth_failed"
-                            )
-                            mainThreadHandler.postDelayed({
-                                startAuthenticationFlow()
-                            }, 2000)
-                        }
-                    }
-                    is ApiResponse.Error -> {
-                        view.logError("Authentication failed: ${response.message}", response.exception)
-                        view.showAuthenticationError("Error en la autenticación")
-                        speakTextUseCase.execute(
-                            "Error en la autenticación, por favor intenta de nuevo",
-                            "auth_failed"
-                        )
-                        // Restart authentication flow
-                        mainThreadHandler.postDelayed({
-                            startAuthenticationFlow()
-                        }, 2000)
-                    }
+                    is ApiResponse.Success -> handleAuthSuccess(response, name)
+                    is ApiResponse.Error -> handleAuthError(response)
                 }
             }
         }
+    }
+
+    private fun handleAuthSuccess(response: ApiResponse.Success, name: String) {
+        try {
+            val authResponse = gson.fromJson(response.body, AuthenticationResponse::class.java)
+            saveUserCredentials(name, authResponse.token)
+            authState = AuthState.AUTHENTICATED
+            speak(authResponse.message, "auth_success")
+            navigateToMainDelayed()
+        } catch (e: Exception) {
+            view.logError("Error parsing auth response: ${e.message}", e)
+            showAuthErrorAndRetry()
+        }
+    }
+
+    private fun saveUserCredentials(name: String, token: String) {
+        userPreferences.authToken = token
+        userPreferences.username = name
+        view.logInfo("Token saved")
+    }
+
+    private fun navigateToMainDelayed() {
+        mainThreadHandler.postDelayed({
+            view.navigateToMainActivity()
+        }, DELAY_NAVIGATION)
+    }
+
+    private fun handleAuthError(response: ApiResponse.Error) {
+        view.logError("Authentication failed: ${response.message}", response.exception)
+        showAuthErrorAndRetry()
+    }
+
+    private fun showAuthErrorAndRetry() {
+        view.showAuthenticationError("Error en la autenticación")
+        speak(MSG_AUTH_ERROR, "auth_failed")
+        mainThreadHandler.postDelayed({
+            startAuthenticationFlow()
+        }, DELAY_NAVIGATION)
     }
 
     override fun stop() {
@@ -250,34 +257,14 @@ class AuthenticationPresenter(
         view.logInfo("Authentication Presenter stopped.")
     }
     
-    /**
-     * Converts Spanish number words to digits.
-     * Handles numbers from 0-9 and removes spaces.
-     */
     private fun convertWordsToNumbers(text: String): String {
         val numberMap = mapOf(
-            "cero" to "0",
-            "uno" to "1",
-            "dos" to "2",
-            "tres" to "3",
-            "cuatro" to "4",
-            "cinco" to "5",
-            "seis" to "6",
-            "siete" to "7",
-            "ocho" to "8",
-            "nueve" to "9"
+            "cero" to "0", "uno" to "1", "dos" to "2", "tres" to "3", "cuatro" to "4",
+            "cinco" to "5", "seis" to "6", "siete" to "7", "ocho" to "8", "nueve" to "9"
         )
         
         var result = text.lowercase().replace(" ", "")
-        
-        // Replace each word with its corresponding digit
-        numberMap.forEach { (word, digit) ->
-            result = result.replace(word, digit)
-        }
-        
-        // Keep only digits
-        result = result.filter { it.isDigit() }
-        
-        return result
+        numberMap.forEach { (word, digit) -> result = result.replace(word, digit) }
+        return result.filter { it.isDigit() }
     }
 }
