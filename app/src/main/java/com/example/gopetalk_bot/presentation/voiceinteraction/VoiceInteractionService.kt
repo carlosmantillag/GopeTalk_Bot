@@ -35,6 +35,7 @@ import com.example.gopetalk_bot.domain.usecases.ConnectWebSocketUseCase
 import com.example.gopetalk_bot.domain.usecases.DisconnectWebSocketUseCase
 import com.example.gopetalk_bot.domain.usecases.PlayAudioFileUseCase
 import com.example.gopetalk_bot.domain.usecases.UpdateWebSocketChannelUseCase
+import com.example.gopetalk_bot.domain.usecases.PollAudioUseCase
 
 class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
@@ -87,6 +88,7 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         val audioPlayerDataSource = AudioPlayerDataSource()
         val audioPlayerRepository = AudioPlayerRepositoryImpl(audioPlayerDataSource)
         val playAudioFileUseCase = PlayAudioFileUseCase(audioPlayerRepository)
+        val pollAudioUseCase = PollAudioUseCase(apiRepository)
 
         presenter = VoiceInteractionPresenter(
             view = this,
@@ -103,7 +105,9 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
             connectWebSocketUseCase = connectWebSocketUseCase,
             disconnectWebSocketUseCase = disconnectWebSocketUseCase,
             playAudioFileUseCase = playAudioFileUseCase,
-            updateWebSocketChannelUseCase = updateWebSocketChannelUseCase
+            updateWebSocketChannelUseCase = updateWebSocketChannelUseCase,
+            pollAudioUseCase = pollAudioUseCase,
+            userPreferences = userPreferences
         )
         
         presenter.start()

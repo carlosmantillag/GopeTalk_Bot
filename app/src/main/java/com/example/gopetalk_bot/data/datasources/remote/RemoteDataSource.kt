@@ -59,13 +59,19 @@ class RemoteDataSource {
         fun onSuccess(audioFile: File)
         fun onFailure(e: IOException)
     }
-    
+
     interface AuthCallback {
         fun onSuccess(statusCode: Int, message: String, token: String)
         fun onFailure(e: IOException)
     }
 
-    fun sendAudioCommand(audioFile: File, userId: String, authToken: String?, callback: ApiCallback) {
+    interface AudioPollCallback {
+        fun onAudioReceived(audioFile: File, fromUserId: String, channel: String)
+        fun onNoAudio()
+        fun onFailure(e: IOException)
+    }
+
+    fun sendAudioCommand(audioFile: File, authToken: String?, callback: ApiCallback) {
         if (!audioFile.exists()) {
             handler.post { 
                 callback.onFailure(IOException("Audio file does not exist: ${audioFile.path}")) 
@@ -80,11 +86,10 @@ class RemoteDataSource {
 
         Log.d(TAG, "Sending audio to backend via Retrofit")
         Log.d(TAG, "URL: ${baseUrl}audio/ingest")
-        Log.d(TAG, "User-ID: $userId")
         Log.d(TAG, "Auth-Token: ${authToken?.take(20)}...")
         Log.d(TAG, "File: ${audioFile.name} (${audioFile.length()} bytes)")
 
-        apiService.sendAudioCommand(userId, authToken, multipartBody).enqueue(object : Callback<ResponseBody> {
+        apiService.sendAudioCommand( authToken, multipartBody).enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 Log.d(TAG, "Response received: ${response.code()}")
                 if (response.isSuccessful) {
@@ -192,45 +197,92 @@ class RemoteDataSource {
 
     fun sendAuthentication(nombre: String, pin: Int, callback: AuthCallback) {
         val authRequest = com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationRequest(nombre, pin)
-        
+
         Log.d(TAG, "Sending authentication to backend")
         Log.d(TAG, "URL: ${baseUrl}auth")
         Log.d(TAG, "Request JSON: ${gson.toJson(authRequest)}")
         Log.d(TAG, "Nombre: $nombre, PIN: $pin")
-        
+
         apiService.authenticate(authRequest).enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 Log.d(TAG, "Authentication response received: ${response.code()}")
                 if (response.isSuccessful) {
                     val bodyString = response.body()?.string() ?: ""
                     Log.d(TAG, "Authentication successful: $bodyString")
-                    
+
                     try {
                         val authResponse = gson.fromJson(bodyString, AuthenticationResponse::class.java)
                         Log.d(TAG, "Parsed auth response - Message: ${authResponse.message}, Token: ${authResponse.token}")
-                        handler.post { 
-                            callback.onSuccess(response.code(), authResponse.message, authResponse.token) 
+                        handler.post {
+                            callback.onSuccess(response.code(), authResponse.message, authResponse.token)
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error parsing authentication response", e)
-                        handler.post { 
-                            callback.onFailure(IOException("Error parsing response: ${e.message}", e)) 
+                        handler.post {
+                            callback.onFailure(IOException("Error parsing response: ${e.message}", e))
                         }
                     }
                 } else {
                     val errorBody = response.errorBody()?.string() ?: "Unknown error"
                     Log.e(TAG, "Authentication error ${response.code()}: $errorBody")
-                    handler.post { 
-                        callback.onFailure(IOException("Authentication error ${response.code()}: $errorBody")) 
+                    handler.post {
+                        callback.onFailure(IOException("Authentication error ${response.code()}: $errorBody"))
                     }
                 }
             }
-            
+
             override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
                 Log.e(TAG, "Authentication request failed", t)
-                handler.post { 
-                    callback.onFailure(IOException("Failed to authenticate: ${t.message}", t)) 
+                handler.post {
+                    callback.onFailure(IOException("Failed to authenticate: ${t.message}", t))
                 }
+            }
+        })
+    }
+
+    fun pollAudio(authToken: String?, callback: AudioPollCallback) {
+        Log.d(TAG, "Polling audio with authToken: ${authToken?.take(20)}...")
+
+        apiService.pollAudio(authToken).enqueue(object : Callback<ResponseBody> {
+            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+                when (response.code()) {
+                    200 -> {
+                        // Audio received
+                        response.body()?.let { body ->
+                            try {
+                                val audioBytes = body.bytes()
+                                val tempFile = File.createTempFile("polled_audio_", ".wav")
+                                tempFile.writeBytes(audioBytes)
+
+                                val fromUserId = response.headers()["X-Audio-From"] ?: "unknown"
+                                val channel = response.headers()["X-Channel"] ?: "unknown"
+
+                                Log.d(TAG, "Audio received via polling from user $fromUserId in channel $channel (${audioBytes.size} bytes)")
+                                handler.post { callback.onAudioReceived(tempFile, fromUserId, channel) }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error processing polled audio", e)
+                                handler.post { callback.onFailure(IOException("Error processing audio: ${e.message}", e)) }
+                            }
+                        } ?: run {
+                            handler.post { callback.onFailure(IOException("Empty response body")) }
+                        }
+                    }
+                    204 -> {
+                        // No audio pending
+                        Log.d(TAG, "No audio pending")
+                        handler.post { callback.onNoAudio() }
+                    }
+                    else -> {
+                        val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                        Log.e(TAG, "Polling error ${response.code()}: $errorBody")
+                        handler.post { callback.onFailure(IOException("Polling error ${response.code()}: $errorBody")) }
+                    }
+                }
+            }
+
+            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                Log.e(TAG, "Polling failed", t)
+                handler.post { callback.onFailure(IOException("Failed to poll audio: ${t.message}", t)) }
             }
         })
     }

@@ -19,14 +19,18 @@ import com.example.gopetalk_bot.domain.usecases.ConnectWebSocketUseCase
 import com.example.gopetalk_bot.domain.usecases.DisconnectWebSocketUseCase
 import com.example.gopetalk_bot.domain.usecases.PlayAudioFileUseCase
 import com.example.gopetalk_bot.domain.usecases.UpdateWebSocketChannelUseCase
+import com.example.gopetalk_bot.domain.usecases.PollAudioUseCase
 import com.example.gopetalk_bot.domain.repositories.WebSocketRepository
 import com.example.gopetalk_bot.domain.repositories.AudioPlayerRepository
 import com.example.gopetalk_bot.presentation.common.AudioRmsMonitor
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -47,7 +51,8 @@ class VoiceInteractionPresenter(
     private val disconnectWebSocketUseCase: DisconnectWebSocketUseCase,
     private val playAudioFileUseCase: PlayAudioFileUseCase,
     private val updateWebSocketChannelUseCase: UpdateWebSocketChannelUseCase,
-    private val userId: String = "1" // TODO: Get from user session
+    private val pollAudioUseCase: PollAudioUseCase,
+    private val userPreferences: com.example.gopetalk_bot.data.datasources.local.UserPreferences
 ) : VoiceInteractionContract.Presenter {
 
     private val presenterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -59,6 +64,12 @@ class VoiceInteractionPresenter(
     
     @Volatile
     private var currentChannel: String? = null
+    
+    private var pollingJob: Job? = null
+    private val pollingIntervalMs = 2000L // 2 segundos
+    
+    private var waitingMessageJob: Job? = null
+    private val waitingMessageDelayMs = 3000L // 3 segundos antes de decir el mensaje de espera
 
     override fun start() {
         view.logInfo("Presenter started.")
@@ -99,10 +110,17 @@ class VoiceInteractionPresenter(
                 sendAudioToBackend(audioData)
             }
         }
+        
+        startAudioPolling()
     }
 
     private fun sendAudioToBackend(audioData: AudioData) {
-        sendAudioCommandUseCase.execute(audioData, userId) { response ->
+        // Programar mensaje de espera después de 3 segundos
+        scheduleWaitingMessage()
+        
+        sendAudioCommandUseCase.execute(audioData) { response ->
+            // Cancelar el mensaje de espera si la respuesta llega antes
+            cancelWaitingMessage()
             mainThreadHandler.post {
                 when (response) {
                     is ApiResponse.Success -> {
@@ -142,6 +160,26 @@ class VoiceInteractionPresenter(
             }
         }
     }
+    
+    private fun scheduleWaitingMessage() {
+        waitingMessageJob?.cancel()
+        waitingMessageJob = presenterScope.launch {
+            delay(waitingMessageDelayMs)
+            view.logInfo("Starting waiting message loop every ${waitingMessageDelayMs}ms")
+            
+            // Loop infinito hasta que se cancele el job
+            while (isActive) {
+                view.logInfo("Saying waiting message")
+                speakTextUseCase.execute("Trayendo tu respuesta, espera", "waiting_message_${System.currentTimeMillis()}")
+                delay(waitingMessageDelayMs)
+            }
+        }
+    }
+    
+    private fun cancelWaitingMessage() {
+        waitingMessageJob?.cancel()
+        waitingMessageJob = null
+    }
 
     private fun handleBackendResponse(response: BackendResponse) {
         view.logInfo("Backend response: $response")
@@ -168,31 +206,40 @@ class VoiceInteractionPresenter(
     
     private fun connectToWebSocket() {
         val wsUrl = "ws://159.223.150.185/ws"
-        view.logInfo("Connecting to WebSocket: $wsUrl with userId=$userId, channel=$currentChannel")
+        val authToken = userPreferences.authToken
+        view.logInfo("Connecting to WebSocket: $wsUrl with authToken=${authToken?.take(20)}..., channel=$currentChannel")
         
-        connectWebSocketUseCase.execute(wsUrl, userId, currentChannel, object : WebSocketRepository.MicrophoneControlListener {
+        connectWebSocketUseCase.execute(wsUrl, authToken, currentChannel, object : WebSocketRepository.MicrophoneControlListener {
             override fun onMicrophoneStart() {
-                view.logInfo("WebSocket: Microphone START signal received")
+                view.logInfo("✅ WebSocket: Microphone START signal received - Unblocking microphone")
+                view.logInfo("   Previous state: isMicrophoneBlocked=$isMicrophoneBlocked")
                 isMicrophoneBlocked = false
+                view.logInfo("   New state: isMicrophoneBlocked=$isMicrophoneBlocked")
                 resumeAudioRecordingUseCase.execute()
+                view.logInfo("   Audio recording resumed")
             }
             
             override fun onMicrophoneStop() {
-                view.logInfo("WebSocket: Microphone STOP signal received")
+                view.logInfo("🛑 WebSocket: Microphone STOP signal received - Blocking microphone")
+                view.logInfo("   Previous state: isMicrophoneBlocked=$isMicrophoneBlocked")
                 isMicrophoneBlocked = true
+                view.logInfo("   New state: isMicrophoneBlocked=$isMicrophoneBlocked")
                 pauseAudioRecordingUseCase.execute()
+                view.logInfo("   Audio recording paused")
             }
             
             override fun onConnectionEstablished() {
-                view.logInfo("WebSocket connection established")
+                view.logInfo("🔌 WebSocket connection established successfully")
+                view.logInfo("   Connected to: $wsUrl")
+                view.logInfo("   AuthToken: ${authToken?.take(20)}..., Channel: ${currentChannel ?: "none"}")
             }
             
             override fun onConnectionClosed() {
-                view.logInfo("WebSocket connection closed")
+                view.logInfo("🔌 WebSocket connection closed")
             }
             
             override fun onError(error: String) {
-                view.logError("WebSocket error: $error", null)
+                view.logError("❌ WebSocket error: $error", null)
             }
         })
     }
@@ -221,10 +268,11 @@ class VoiceInteractionPresenter(
     override fun updateChannel(channel: String?) {
         currentChannel = channel
         view.logInfo("Channel updated to: $channel")
-        updateWebSocketChannelUseCase.execute(userId, channel)
+        updateWebSocketChannelUseCase.execute(userPreferences.authToken, channel)
     }
 
     override fun stop() {
+        stopAudioPolling()
         disconnectWebSocketUseCase.execute()
         stopAudioMonitoringUseCase.execute()
         shutdownTtsUseCase.execute()
@@ -236,5 +284,44 @@ class VoiceInteractionPresenter(
         val message = "Bienvenido $username, indícame el canal al que te quieras unir"
         speakTextUseCase.execute(message, "welcome_message")
         view.logInfo("Speaking welcome message for user: $username")
+    }
+    
+    private fun startAudioPolling() {
+        view.logInfo("🔄 Starting audio polling every ${pollingIntervalMs}ms")
+        
+        pollingJob = presenterScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                try {
+                    pollAudioUseCase.execute(
+                        onAudioReceived = { audioFile, fromUserId, channel ->
+                            mainThreadHandler.post {
+                                view.logInfo("📥 Audio received via polling from user $fromUserId in channel $channel")
+                                playReceivedAudioFile(audioFile)
+                            }
+                        },
+                        onNoAudio = {
+                            // No hacer nada, es normal que no haya audio pendiente
+                        },
+                        onError = { error ->
+                            mainThreadHandler.post {
+                                view.logError("❌ Polling error: $error", null)
+                            }
+                        }
+                    )
+                } catch (e: Exception) {
+                    mainThreadHandler.post {
+                        view.logError("❌ Polling exception: ${e.message}", e)
+                    }
+                }
+                
+                delay(pollingIntervalMs)
+            }
+        }
+    }
+    
+    private fun stopAudioPolling() {
+        view.logInfo("🛑 Stopping audio polling")
+        pollingJob?.cancel()
+        pollingJob = null
     }
 }

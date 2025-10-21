@@ -26,7 +26,7 @@ class WebSocketDataSource {
         fun onError(error: String)
     }
 
-    fun connect(url: String, userId: String, channel: String?, listener: MicrophoneControlListener) {
+    fun connect(url: String, authToken: String?, channel: String?, listener: MicrophoneControlListener) {
         this.listener = listener
         
         val request = Request.Builder()
@@ -39,7 +39,9 @@ class WebSocketDataSource {
                 
                 // Send handshake
                 val handshake = JSONObject().apply {
-                    put("userId", userId)
+                    if (!authToken.isNullOrBlank()) {
+                        put("authToken", authToken)
+                    }
                     if (!channel.isNullOrBlank()) {
                         put("channel", channel)
                     }
@@ -54,18 +56,83 @@ class WebSocketDataSource {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 Log.d(TAG, "WebSocket message received: $text")
                 
-                // Handle simple text messages (START/STOP)
-                when (text.trim().uppercase()) {
-                    "START" -> {
-                        Log.d(TAG, "Microphone START signal received")
-                        listener.onMicrophoneStart()
+                try {
+                    // Try to parse as JSON first
+                    if (text.trim().startsWith("{")) {
+                        val json = JSONObject(text)
+                        
+                        // Check for action field
+                        if (json.has("action")) {
+                            val action = json.getString("action").uppercase()
+                            Log.d(TAG, "JSON action received: $action")
+                            
+                            when (action) {
+                                "START" -> {
+                                    Log.d(TAG, "Microphone START signal received (JSON)")
+                                    listener.onMicrophoneStart()
+                                    return
+                                }
+                                "STOP" -> {
+                                    Log.d(TAG, "Microphone STOP signal received (JSON)")
+                                    listener.onMicrophoneStop()
+                                    return
+                                }
+                            }
+                        }
+                        
+                        // Check for type field (alternative format)
+                        if (json.has("type")) {
+                            val type = json.getString("type").uppercase()
+                            Log.d(TAG, "JSON type received: $type")
+                            
+                            when (type) {
+                                "START" -> {
+                                    Log.d(TAG, "Microphone START signal received (JSON type)")
+                                    listener.onMicrophoneStart()
+                                    return
+                                }
+                                "STOP" -> {
+                                    Log.d(TAG, "Microphone STOP signal received (JSON type)")
+                                    listener.onMicrophoneStop()
+                                    return
+                                }
+                            }
+                        }
+                        
+                        Log.d(TAG, "JSON message without recognized action/type: $text")
+                    } else {
+                        // Handle simple text messages (START/STOP)
+                        when (text.trim().uppercase()) {
+                            "START" -> {
+                                Log.d(TAG, "Microphone START signal received (plain text)")
+                                listener.onMicrophoneStart()
+                                return
+                            }
+                            "STOP" -> {
+                                Log.d(TAG, "Microphone STOP signal received (plain text)")
+                                listener.onMicrophoneStop()
+                                return
+                            }
+                        }
                     }
-                    "STOP" -> {
-                        Log.d(TAG, "Microphone STOP signal received")
-                        listener.onMicrophoneStop()
-                    }
-                    else -> {
-                        Log.w(TAG, "Unknown WebSocket message: $text")
+                    
+                    Log.w(TAG, "Unknown WebSocket message: $text")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing WebSocket message: $text", e)
+                    
+                    // Fallback to simple text parsing
+                    when (text.trim().uppercase()) {
+                        "START" -> {
+                            Log.d(TAG, "Microphone START signal received (fallback)")
+                            listener.onMicrophoneStart()
+                        }
+                        "STOP" -> {
+                            Log.d(TAG, "Microphone STOP signal received (fallback)")
+                            listener.onMicrophoneStop()
+                        }
+                        else -> {
+                            Log.w(TAG, "Unknown WebSocket message after fallback: $text")
+                        }
                     }
                 }
             }
@@ -92,10 +159,12 @@ class WebSocketDataSource {
         webSocket = null
     }
     
-    fun updateChannel(userId: String, channel: String?) {
+    fun updateChannel(authToken: String?, channel: String?) {
         webSocket?.let { ws ->
             val update = JSONObject().apply {
-                put("userId", userId)
+                if (!authToken.isNullOrBlank()) {
+                    put("authToken", authToken)
+                }
                 if (!channel.isNullOrBlank()) {
                     put("channel", channel)
                 }

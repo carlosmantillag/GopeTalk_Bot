@@ -9,9 +9,8 @@ class SendAudioCommandUseCase(
 ) {
     fun execute(
         audioData: AudioData,
-        userId: String,
         callback: (ApiResponse) -> Unit
     ) {
-        apiRepository.sendAudioCommand(audioData, userId, callback)
+        apiRepository.sendAudioCommand(audioData, callback)
     }
 }
