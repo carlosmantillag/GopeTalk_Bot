@@ -51,4 +51,65 @@ class CheckPermissionsUseCaseTest {
         assertThat(result.allGranted).isFalse()
         assertThat(result.permissions).hasSize(2)
     }
+
+    @Test
+    fun `execute should handle empty permissions list`() {
+        val expectedStatus = PermissionStatus(
+            permissions = emptyList(),
+            allGranted = true
+        )
+        every { permissionRepository.getPermissionStatus() } returns expectedStatus
+
+        val result = useCase.execute()
+
+        assertThat(result.permissions).isEmpty()
+        assertThat(result.allGranted).isTrue()
+    }
+
+    @Test
+    fun `execute should handle multiple consecutive calls`() {
+        val status = PermissionStatus(
+            permissions = listOf("android.permission.RECORD_AUDIO"),
+            allGranted = true
+        )
+        every { permissionRepository.getPermissionStatus() } returns status
+
+        useCase.execute()
+        useCase.execute()
+        useCase.execute()
+
+        verify(exactly = 3) { permissionRepository.getPermissionStatus() }
+    }
+
+    @Test
+    fun `execute should handle single permission granted`() {
+        val status = PermissionStatus(
+            permissions = listOf("android.permission.RECORD_AUDIO"),
+            allGranted = true
+        )
+        every { permissionRepository.getPermissionStatus() } returns status
+
+        val result = useCase.execute()
+
+        assertThat(result.allGranted).isTrue()
+        assertThat(result.permissions).hasSize(1)
+    }
+
+    @Test
+    fun `execute should handle multiple permissions with mixed status`() {
+        val status = PermissionStatus(
+            permissions = listOf(
+                "android.permission.RECORD_AUDIO",
+                "android.permission.INTERNET",
+                "android.permission.ACCESS_NETWORK_STATE"
+            ),
+            allGranted = false
+        )
+        every { permissionRepository.getPermissionStatus() } returns status
+
+        val result = useCase.execute()
+
+        assertThat(result.allGranted).isFalse()
+        assertThat(result.permissions).hasSize(3)
+    }
 }

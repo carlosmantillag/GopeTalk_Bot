@@ -237,4 +237,85 @@ class ApiRepositoryImplTest {
 
         assertThat(errorMessage).isEqualTo("Polling failed")
     }
+
+    @Test
+    fun `sendAudioCommand with audio file response should return file`() {
+        val mockFile = mockk<File>(relaxed = true)
+        val mockResponseFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(mockFile, 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
+        var capturedResponse: ApiResponse? = null
+        var capturedCallback: RemoteDataSource.ApiCallback? = null
+
+        every { remoteDataSource.sendAudioCommand(any(), any(), any()) } answers {
+            capturedCallback = thirdArg()
+        }
+
+        repository.sendAudioCommand(audioData) { response ->
+            capturedResponse = response
+        }
+
+        capturedCallback?.onSuccess(200, "OK", mockResponseFile)
+
+        assertThat(capturedResponse).isInstanceOf(ApiResponse.Success::class.java)
+        val successResponse = capturedResponse as ApiResponse.Success
+        assertThat(successResponse.audioFile).isEqualTo(mockResponseFile)
+    }
+
+    @Test
+    fun `sendAuthentication with different status codes should work`() {
+        var capturedResponse: ApiResponse? = null
+        var capturedCallback: RemoteDataSource.AuthCallback? = null
+
+        every { remoteDataSource.sendAuthentication(any(), any(), any()) } answers {
+            capturedCallback = thirdArg()
+        }
+
+        repository.sendAuthentication("User", 5678) { response ->
+            capturedResponse = response
+        }
+
+        capturedCallback?.onSuccess(201, "Created", "new-token")
+
+        assertThat(capturedResponse).isInstanceOf(ApiResponse.Success::class.java)
+        val successResponse = capturedResponse as ApiResponse.Success
+        assertThat(successResponse.statusCode).isEqualTo(201)
+    }
+
+    @Test
+    fun `pollAudio with different channels should work`() {
+        val mockFile = mockk<File>(relaxed = true)
+        var capturedCallback: RemoteDataSource.AudioPollCallback? = null
+        var receivedChannel: String? = null
+
+        every { remoteDataSource.pollAudio(any(), any()) } answers {
+            capturedCallback = secondArg()
+        }
+
+        repository.pollAudio(
+            onAudioReceived = { _, _, channel -> receivedChannel = channel },
+            onNoAudio = {},
+            onError = {}
+        )
+
+        capturedCallback?.onAudioReceived(mockFile, "user456", "private-channel")
+
+        assertThat(receivedChannel).isEqualTo("private-channel")
+    }
+
+    @Test
+    fun `sendAudioCommand with empty auth token should still work`() {
+        every { userPreferences.authToken } returns ""
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(mockFile, 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
+
+        repository.sendAudioCommand(audioData) {}
+
+        verify { 
+            remoteDataSource.sendAudioCommand(
+                audioFile = mockFile,
+                authToken = "",
+                callback = any()
+            )
+        }
+    }
 }

@@ -62,7 +62,7 @@ class SendAudioCommandUseCaseTest {
     @Test
     fun `execute should invoke callback with error response`() {
         val audioData = AudioData(mockFile, 16000, 1, AudioFormat.PCM_16BIT)
-        val errorResponse = ApiResponse.Error("Network error", null)
+        val errorResponse = ApiResponse.Error("Network error", null, null)
         val callback: (ApiResponse) -> Unit = mockk(relaxed = true)
 
         every { 
@@ -87,5 +87,43 @@ class SendAudioCommandUseCaseTest {
         useCase.execute(audioData2, callback)
 
         verify(exactly = 2) { apiRepository.sendAudioCommand(any(), callback) }
+    }
+
+    @Test
+    fun `execute should handle multiple consecutive calls`() {
+        val audioData = AudioData(mockFile, 16000, 1, AudioFormat.PCM_16BIT)
+        val callback: (ApiResponse) -> Unit = mockk(relaxed = true)
+
+        useCase.execute(audioData, callback)
+        useCase.execute(audioData, callback)
+        useCase.execute(audioData, callback)
+
+        verify(exactly = 3) { apiRepository.sendAudioCommand(audioData, callback) }
+    }
+
+    @Test
+    fun `execute should handle different callbacks`() {
+        val audioData = AudioData(mockFile, 16000, 1, AudioFormat.PCM_16BIT)
+        val callback1: (ApiResponse) -> Unit = mockk(relaxed = true)
+        val callback2: (ApiResponse) -> Unit = mockk(relaxed = true)
+
+        useCase.execute(audioData, callback1)
+        useCase.execute(audioData, callback2)
+
+        verify { apiRepository.sendAudioCommand(audioData, callback1) }
+        verify { apiRepository.sendAudioCommand(audioData, callback2) }
+    }
+
+    @Test
+    fun `execute should handle audio with different channels`() {
+        val monoAudio = AudioData(mockFile, 16000, 1, AudioFormat.PCM_16BIT)
+        val stereoAudio = AudioData(mockFile, 16000, 2, AudioFormat.PCM_16BIT)
+        val callback: (ApiResponse) -> Unit = mockk(relaxed = true)
+
+        useCase.execute(monoAudio, callback)
+        useCase.execute(stereoAudio, callback)
+
+        verify { apiRepository.sendAudioCommand(monoAudio, callback) }
+        verify { apiRepository.sendAudioCommand(stereoAudio, callback) }
     }
 }

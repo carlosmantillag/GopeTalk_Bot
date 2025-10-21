@@ -57,7 +57,7 @@ class SendAuthenticationUseCaseTest {
     fun `execute should invoke callback with error response`() {
         val nombre = "TestUser"
         val pin = 1234
-        val errorResponse = ApiResponse.Error("Invalid credentials", null)
+        val errorResponse = ApiResponse.Error("Invalid credentials", null, null)
         val callback: (ApiResponse) -> Unit = mockk(relaxed = true)
 
         every { 

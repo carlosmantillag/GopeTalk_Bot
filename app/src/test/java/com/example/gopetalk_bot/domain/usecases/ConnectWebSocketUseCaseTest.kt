@@ -72,4 +72,73 @@ class ConnectWebSocketUseCaseTest {
 
         verify { mockListener.onMicrophoneStart() }
     }
+
+    @Test
+    fun `execute should handle multiple consecutive calls`() {
+        val url = "ws://test.com"
+        val authToken = "test-token"
+        val channel = "test-channel"
+
+        useCase.execute(url, authToken, channel, mockListener)
+        useCase.execute(url, authToken, channel, mockListener)
+
+        verify(exactly = 2) { webSocketRepository.connect(url, authToken, channel, mockListener) }
+    }
+
+    @Test
+    fun `execute should handle different URLs`() {
+        val authToken = "test-token"
+        val channel = "test-channel"
+
+        useCase.execute("ws://server1.com", authToken, channel, mockListener)
+        useCase.execute("ws://server2.com", authToken, channel, mockListener)
+
+        verify { webSocketRepository.connect("ws://server1.com", authToken, channel, mockListener) }
+        verify { webSocketRepository.connect("ws://server2.com", authToken, channel, mockListener) }
+    }
+
+    @Test
+    fun `execute should handle different channels`() {
+        val url = "ws://test.com"
+        val authToken = "test-token"
+
+        useCase.execute(url, authToken, "channel1", mockListener)
+        useCase.execute(url, authToken, "channel2", mockListener)
+
+        verify { webSocketRepository.connect(url, authToken, "channel1", mockListener) }
+        verify { webSocketRepository.connect(url, authToken, "channel2", mockListener) }
+    }
+
+    @Test
+    fun `execute should handle different auth tokens`() {
+        val url = "ws://test.com"
+        val channel = "test-channel"
+
+        useCase.execute(url, "token1", channel, mockListener)
+        useCase.execute(url, "token2", channel, mockListener)
+
+        verify { webSocketRepository.connect(url, "token1", channel, mockListener) }
+        verify { webSocketRepository.connect(url, "token2", channel, mockListener) }
+    }
+
+    @Test
+    fun `execute should handle empty URL`() {
+        useCase.execute("", "token", "channel", mockListener)
+
+        verify { webSocketRepository.connect("", "token", "channel", mockListener) }
+    }
+
+    @Test
+    fun `execute should handle empty channel`() {
+        useCase.execute("ws://test.com", "token", "", mockListener)
+
+        verify { webSocketRepository.connect("ws://test.com", "token", "", mockListener) }
+    }
+
+    @Test
+    fun `execute should handle both null authToken and channel`() {
+        useCase.execute("ws://test.com", null, null, mockListener)
+
+        verify { webSocketRepository.connect("ws://test.com", null, null, mockListener) }
+    }
 }

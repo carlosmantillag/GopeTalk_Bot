@@ -36,4 +36,30 @@ class StartAudioMonitoringUseCaseTest {
 
         verify(exactly = 2) { audioRepository.startMonitoring() }
     }
+
+    @Test
+    fun `execute should handle three consecutive calls`() {
+        useCase.execute()
+        useCase.execute()
+        useCase.execute()
+
+        verify(exactly = 3) { audioRepository.startMonitoring() }
+    }
+
+    @Test
+    fun `execute should not throw exception`() {
+        // Should complete without throwing
+        useCase.execute()
+        
+        verify { audioRepository.startMonitoring() }
+    }
+
+    @Test
+    fun `execute should call repository each time`() {
+        repeat(5) {
+            useCase.execute()
+        }
+
+        verify(exactly = 5) { audioRepository.startMonitoring() }
+    }
 }

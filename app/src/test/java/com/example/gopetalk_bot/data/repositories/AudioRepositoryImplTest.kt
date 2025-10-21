@@ -122,4 +122,63 @@ class AudioRepositoryImplTest {
         verify(exactly = 2) { audioDataSource.pauseRecording() }
         verify(exactly = 1) { audioDataSource.resumeRecording() }
     }
+
+    @Test
+    fun `stopMonitoring should be idempotent`() {
+        repository.stopMonitoring()
+        repository.stopMonitoring()
+
+        verify(exactly = 2) { audioDataSource.stopMonitoring() }
+    }
+
+    @Test
+    fun `release should be idempotent`() {
+        repository.release()
+        repository.release()
+
+        verify(exactly = 2) { audioDataSource.release() }
+    }
+
+    @Test
+    fun `startMonitoring after stopMonitoring should work`() {
+        repository.startMonitoring()
+        repository.stopMonitoring()
+        repository.startMonitoring()
+
+        verify(exactly = 2) { audioDataSource.startMonitoring(any(), any(), any()) }
+        verify(exactly = 1) { audioDataSource.stopMonitoring() }
+    }
+
+    @Test
+    fun `pauseRecording multiple times should work`() {
+        repository.pauseRecording()
+        repository.pauseRecording()
+        repository.pauseRecording()
+
+        verify(exactly = 3) { audioDataSource.pauseRecording() }
+    }
+
+    @Test
+    fun `resumeRecording multiple times should work`() {
+        repository.resumeRecording()
+        repository.resumeRecording()
+
+        verify(exactly = 2) { audioDataSource.resumeRecording() }
+    }
+
+    @Test
+    fun `error callback should be invoked on data source error`() = runTest {
+        var capturedErrorCallback: ((String) -> Unit)? = null
+        var errorMessage: String? = null
+
+        every { audioDataSource.startMonitoring(any(), any(), any()) } answers {
+            capturedErrorCallback = thirdArg()
+        }
+
+        repository.startMonitoring()
+        capturedErrorCallback?.invoke("Test error")
+
+        // Error is logged but doesn't throw
+        assertThat(capturedErrorCallback).isNotNull()
+    }
 }

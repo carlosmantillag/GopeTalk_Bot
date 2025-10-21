@@ -54,4 +54,63 @@ class PollAudioUseCaseTest {
 
         verify { apiRepository.pollAudio(any(), any(), any()) }
     }
+
+    @Test
+    fun `execute should handle multiple consecutive calls`() {
+        val onAudioReceived: (File, String, String) -> Unit = mockk(relaxed = true)
+        val onNoAudio: () -> Unit = mockk(relaxed = true)
+        val onError: (String) -> Unit = mockk(relaxed = true)
+
+        useCase.execute(onAudioReceived, onNoAudio, onError)
+        useCase.execute(onAudioReceived, onNoAudio, onError)
+
+        verify(exactly = 2) { apiRepository.pollAudio(onAudioReceived, onNoAudio, onError) }
+    }
+
+    @Test
+    fun `execute should handle different callback instances`() {
+        val onAudioReceived1: (File, String, String) -> Unit = mockk(relaxed = true)
+        val onNoAudio1: () -> Unit = mockk(relaxed = true)
+        val onError1: (String) -> Unit = mockk(relaxed = true)
+
+        val onAudioReceived2: (File, String, String) -> Unit = mockk(relaxed = true)
+        val onNoAudio2: () -> Unit = mockk(relaxed = true)
+        val onError2: (String) -> Unit = mockk(relaxed = true)
+
+        useCase.execute(onAudioReceived1, onNoAudio1, onError1)
+        useCase.execute(onAudioReceived2, onNoAudio2, onError2)
+
+        verify { apiRepository.pollAudio(onAudioReceived1, onNoAudio1, onError1) }
+        verify { apiRepository.pollAudio(onAudioReceived2, onNoAudio2, onError2) }
+    }
+
+    @Test
+    fun `execute should work with lambda callbacks`() {
+        var file: File? = null
+        var userId: String? = null
+        var channel: String? = null
+
+        useCase.execute(
+            onAudioReceived = { f, u, c -> 
+                file = f
+                userId = u
+                channel = c
+            },
+            onNoAudio = {},
+            onError = {}
+        )
+
+        verify { apiRepository.pollAudio(any(), any(), any()) }
+    }
+
+    @Test
+    fun `execute should handle empty lambda callbacks`() {
+        useCase.execute(
+            onAudioReceived = { _, _, _ -> },
+            onNoAudio = {},
+            onError = {}
+        )
+
+        verify { apiRepository.pollAudio(any(), any(), any()) }
+    }
 }

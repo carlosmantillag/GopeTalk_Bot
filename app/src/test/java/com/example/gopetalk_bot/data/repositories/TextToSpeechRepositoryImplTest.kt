@@ -134,4 +134,86 @@ class TextToSpeechRepositoryImplTest {
 
         assertThat(errorCalled).isTrue()
     }
+
+    @Test
+    fun `speak should handle multiple consecutive calls`() {
+        repository.speak("Text 1", "id-1")
+        repository.speak("Text 2", "id-2")
+        repository.speak("Text 3", "id-3")
+
+        verify { ttsDataSource.speak("Text 1", "id-1") }
+        verify { ttsDataSource.speak("Text 2", "id-2") }
+        verify { ttsDataSource.speak("Text 3", "id-3") }
+    }
+
+    @Test
+    fun `speak should handle empty text`() {
+        repository.speak("", "utterance-1")
+
+        verify { ttsDataSource.speak("", "utterance-1") }
+    }
+
+    @Test
+    fun `speak should handle long text`() {
+        val longText = "a".repeat(5000)
+        repository.speak(longText, "utterance-1")
+
+        verify { ttsDataSource.speak(longText, "utterance-1") }
+    }
+
+    @Test
+    fun `shutdown should be idempotent`() {
+        repository.shutdown()
+        repository.shutdown()
+
+        verify(exactly = 2) { ttsDataSource.shutdown() }
+    }
+
+    @Test
+    fun `utterance listener should handle null utterance IDs`() {
+        var capturedListener: UtteranceProgressListener? = null
+        var startUtteranceId: String? = "not-null"
+        
+        every { ttsDataSource.setUtteranceProgressListener(any()) } answers {
+            capturedListener = firstArg()
+        }
+
+        repository.setUtteranceProgressListener(
+            onStart = { startUtteranceId = it },
+            onDone = {},
+            onError = {}
+        )
+
+        capturedListener?.onStart(null)
+
+        assertThat(startUtteranceId).isNull()
+    }
+
+    @Test
+    fun `utterance listener should pass correct utterance ID`() {
+        var capturedListener: UtteranceProgressListener? = null
+        var receivedId: String? = null
+        
+        every { ttsDataSource.setUtteranceProgressListener(any()) } answers {
+            capturedListener = firstArg()
+        }
+
+        repository.setUtteranceProgressListener(
+            onStart = { receivedId = it },
+            onDone = {},
+            onError = {}
+        )
+
+        capturedListener?.onStart("specific-id-123")
+
+        assertThat(receivedId).isEqualTo("specific-id-123")
+    }
+
+    @Test
+    fun `setUtteranceProgressListener should be callable multiple times`() {
+        repository.setUtteranceProgressListener({}, {}, {})
+        repository.setUtteranceProgressListener({}, {}, {})
+
+        verify(exactly = 2) { ttsDataSource.setUtteranceProgressListener(any()) }
+    }
 }

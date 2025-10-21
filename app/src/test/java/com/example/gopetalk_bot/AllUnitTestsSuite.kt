@@ -1,8 +1,11 @@
 package com.example.gopetalk_bot
 
+import com.example.gopetalk_bot.data.datasources.local.UserPreferencesTest
 import com.example.gopetalk_bot.data.repositories.*
+import com.example.gopetalk_bot.domain.entities.*
 import com.example.gopetalk_bot.domain.usecases.*
 import com.example.gopetalk_bot.presentation.authentication.AuthenticationPresenterTest
+import com.example.gopetalk_bot.presentation.common.AudioRmsMonitorTest
 import com.example.gopetalk_bot.presentation.main.MainPresenterTest
 import com.example.gopetalk_bot.presentation.voiceinteraction.VoiceInteractionPresenterTest
 import org.junit.runner.RunWith
@@ -29,6 +32,16 @@ import org.junit.runners.Suite
     PlayAudioFileUseCaseTest::class,
     PollAudioUseCaseTest::class,
     
+    // Domain Layer - Entities
+    ApiResponseTest::class,
+    AudioDataTest::class,
+    AudioLevelTest::class,
+    AudioFormatTest::class,
+    PermissionStatusTest::class,
+    
+    // Data Layer - DataSources
+    UserPreferencesTest::class,
+    
     // Data Layer - Repositories
     UserRepositoryImplTest::class,
     PermissionRepositoryImplTest::class,
@@ -41,6 +54,9 @@ import org.junit.runners.Suite
     // Presentation Layer - Presenters
     AuthenticationPresenterTest::class,
     MainPresenterTest::class,
-    VoiceInteractionPresenterTest::class
+    VoiceInteractionPresenterTest::class,
+    
+    // Presentation Layer - Common
+    AudioRmsMonitorTest::class
 )
 class AllUnitTestsSuite
