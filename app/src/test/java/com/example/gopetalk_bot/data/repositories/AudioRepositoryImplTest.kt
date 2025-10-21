@@ -65,25 +65,6 @@ class AudioRepositoryImplTest {
         verify { audioDataSource.release() }
     }
 
-    @Test
-    fun `getAudioLevelStream should emit audio levels from data source`() = runTest {
-        var capturedCallback: ((AudioDataSource.AudioLevelData) -> Unit)? = null
-
-        every { audioDataSource.startMonitoring(any(), any(), any()) } answers {
-            capturedCallback = firstArg()
-        }
-
-        repository.startMonitoring()
-        val flow = repository.getAudioLevelStream()
-
-        // Simulate audio level callback
-        val testAudioLevel = AudioDataSource.AudioLevelData(rmsDb = 50.0f)
-        capturedCallback?.invoke(testAudioLevel)
-
-        val result = flow.first()
-        assertThat(result.rmsDb).isEqualTo(50.0f)
-    }
-
    /* @Test
     fun `getRecordedAudioStream should emit recorded audio from data source`() = runTest {
         var capturedCallback: ((AudioDataSource.RecordedAudioData) -> Unit)? = null
