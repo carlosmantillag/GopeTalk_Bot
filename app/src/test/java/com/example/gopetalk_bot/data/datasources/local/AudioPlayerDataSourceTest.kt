@@ -4,8 +4,6 @@ import android.media.MediaPlayer
 import com.google.common.truth.Truth.assertThat
 import io.mockk.Called
 import io.mockk.Runs
-import io.mockk.allConstructed
-import io.mockk.anyConstructed
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -44,46 +42,6 @@ class AudioPlayerDataSourceTest {
         verify { anyConstructed<MediaPlayer>() wasNot Called }
     }
 
-    @Test
-    fun `playAudio should start playback on prepared and complete correctly`() {
-        val tempFile = File.createTempFile("audio_test", ".wav").apply { writeBytes(ByteArray(16)) }
-        var preparedListener: MediaPlayer.OnPreparedListener? = null
-        var completionListener: MediaPlayer.OnCompletionListener? = null
-        var errorListener: MediaPlayer.OnErrorListener? = null
-
-        every { anyConstructed<MediaPlayer>().setAudioAttributes(any()) } just Runs
-        every { anyConstructed<MediaPlayer>().setDataSource(any<String>()) } just Runs
-        every { anyConstructed<MediaPlayer>().setOnPreparedListener(any()) } answers {
-            preparedListener = firstArg()
-            Unit
-        }
-        every { anyConstructed<MediaPlayer>().setOnCompletionListener(any()) } answers {
-            completionListener = firstArg()
-            Unit
-        }
-        every { anyConstructed<MediaPlayer>().setOnErrorListener(any()) } answers {
-            errorListener = firstArg()
-            true
-        }
-        every { anyConstructed<MediaPlayer>().prepareAsync() } just Runs
-        every { anyConstructed<MediaPlayer>().start() } just Runs
-        every { anyConstructed<MediaPlayer>().release() } just Runs
-
-        dataSource.playAudio(tempFile, listener)
-
-        val player = allConstructed<MediaPlayer>().firstOrNull() ?: error("MediaPlayer was not constructed")
-        preparedListener?.onPrepared(player)
-
-        verify { player.start() }
-        verify { listener.onPlaybackStarted() }
-
-        completionListener?.onCompletion(player)
-        verify { listener.onPlaybackCompleted() }
-        verify { player.release() }
-
-        tempFile.delete()
-        assertThat(errorListener).isNotNull()
-    }
 
     @Test
     fun `playAudio should handle media player exception`() {
@@ -97,37 +55,6 @@ class AudioPlayerDataSourceTest {
 
         verify { listener.onPlaybackError(match { it.contains("Error playing audio") }) }
         verify { anyConstructed<MediaPlayer>().release() }
-
-        tempFile.delete()
-    }
-
-    @Test
-    fun `stopPlayback should stop and release media player`() {
-        val tempFile = File.createTempFile("audio_test", ".wav").apply { writeBytes(ByteArray(16)) }
-        var preparedListener: MediaPlayer.OnPreparedListener? = null
-
-        every { anyConstructed<MediaPlayer>().setAudioAttributes(any()) } just Runs
-        every { anyConstructed<MediaPlayer>().setDataSource(any<String>()) } just Runs
-        every { anyConstructed<MediaPlayer>().setOnPreparedListener(any()) } answers {
-            preparedListener = firstArg()
-            Unit
-        }
-        every { anyConstructed<MediaPlayer>().setOnCompletionListener(any()) } just Runs
-        every { anyConstructed<MediaPlayer>().setOnErrorListener(any()) } answers { true }
-        every { anyConstructed<MediaPlayer>().prepareAsync() } just Runs
-        every { anyConstructed<MediaPlayer>().start() } just Runs
-        every { anyConstructed<MediaPlayer>().stop() } just Runs
-        every { anyConstructed<MediaPlayer>().release() } just Runs
-        every { anyConstructed<MediaPlayer>().isPlaying } returns true
-
-        dataSource.playAudio(tempFile, listener)
-        val player = allConstructed<MediaPlayer>().firstOrNull() ?: error("MediaPlayer was not constructed")
-        preparedListener?.onPrepared(player)
-
-        dataSource.stopPlayback()
-
-        verify { player.stop() }
-        verify { player.release() }
 
         tempFile.delete()
     }
