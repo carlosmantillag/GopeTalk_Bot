@@ -13,7 +13,7 @@ class MainPresenter(
         val permissionStatus = checkPermissionsUseCase.execute()
         
         if (permissionStatus.allGranted) {
-            view.startVoiceService()
+            startServices()
         } else {
             view.requestPermissions(permissionStatus.permissions.toTypedArray())
         }
@@ -21,9 +21,17 @@ class MainPresenter(
 
     override fun onPermissionsResult(allGranted: Boolean) {
         if (allGranted) {
-            view.startVoiceService()
+            startServices()
         } else {
             view.showPermissionsRequiredError()
         }
+    }
+
+    private fun startServices() {
+        view.startVoiceService()
+        
+        // Obtener el nombre de usuario guardado y dar la bienvenida
+        val username = userRepository.getUsername()
+        view.speakWelcomeMessage(username)
     }
 }

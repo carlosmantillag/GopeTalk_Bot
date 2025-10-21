@@ -83,7 +83,7 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         handleIntent(intent)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -101,6 +101,20 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         if (t != null) Log.e(TAG, message, t) else Log.e(TAG, message)
     }
 
+    override fun logout() {
+        logInfo("Logging out user")
+        val userPreferences = UserPreferences(this)
+        userPreferences.clearSession()
+        
+        // Navegar de vuelta a la pantalla de autenticación
+        val intent = Intent(this, com.example.gopetalk_bot.presentation.authentication.AuthenticationActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        
+        // Detener el servicio
+        stopSelf()
+    }
+
     private fun setupNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW)
@@ -116,7 +130,9 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
     override fun onDestroy() {
         super.onDestroy()
+        logInfo("Service is being destroyed")
         presenter.stop()
+        stopForeground(true)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

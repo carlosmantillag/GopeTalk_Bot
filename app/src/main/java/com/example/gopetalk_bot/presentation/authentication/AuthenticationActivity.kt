@@ -54,12 +54,12 @@ import kotlin.random.Random
 
 class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View {
 
-    private lateinit var presenter: AuthenticationContract.Presenter
+    private var presenter: AuthenticationContract.Presenter? = null
 
     private val requestMultiplePermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        presenter.onPermissionsResult(permissions.entries.all { it.value })
+        presenter?.onPermissionsResult(permissions.entries.all { it.value })
     }
 
     override val context: Context
@@ -72,9 +72,17 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val speechRecognizerDataSource = com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSource(this)
         val userPreferences = com.example.gopetalk_bot.data.datasources.local.UserPreferences(this)
         
+        // Verificar si ya hay una sesión activa
+        if (userPreferences.hasActiveSession()) {
+            logInfo("Active session found, navigating to MainActivity")
+            navigateToMainActivity()
+            finish()
+            return
+        }
+        
+        val speechRecognizerDataSource = com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSource(this)
         val permissionDataSource = PermissionDataSource(this)
         val permissionRepository = PermissionRepositoryImpl(permissionDataSource)
         val checkPermissionsUseCase = CheckPermissionsUseCase(permissionRepository)
@@ -103,7 +111,7 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
             checkPermissionsUseCase = checkPermissionsUseCase
         )
 
-        presenter.onViewCreated()
+        presenter?.onViewCreated()
 
         setContent {
             GopeTalk_BotTheme {
@@ -230,6 +238,6 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
 
     override fun onDestroy() {
         super.onDestroy()
-        presenter.stop()
+        presenter?.stop()
     }
 }

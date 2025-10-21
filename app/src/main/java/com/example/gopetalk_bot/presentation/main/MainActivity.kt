@@ -168,4 +168,10 @@ class MainActivity : ComponentActivity(), MainContract.View {
             startService(intent)
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Stop the voice interaction service when the app is closed
+        stopService(Intent(this, VoiceInteractionService::class.java))
+    }
 }

@@ -190,8 +190,19 @@ class VoiceInteractionPresenter(
         return when (response.action) {
             "list_channels" -> "La lista de canales es: ${response.channels.joinToString(", ")}"
             "list_users" -> "La lista de usuarios es: ${response.users.joinToString(", ")}"
+            "logout" -> {
+                handleLogout()
+                "Cerrando sesión, hasta luego"
+            }
             else -> "Acción no reconocida"
         }
+    }
+    
+    private fun handleLogout() {
+        view.logInfo("Logout requested")
+        mainThreadHandler.postDelayed({
+            view.logout()
+        }, 2000) // Esperar 2 segundos para que termine de hablar
     }
     
     private fun connectToWebSocket() {

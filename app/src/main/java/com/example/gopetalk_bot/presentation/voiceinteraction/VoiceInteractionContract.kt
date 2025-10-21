@@ -7,6 +7,7 @@ interface VoiceInteractionContract {
         val context: Context
         fun logInfo(message: String)
         fun logError(message: String, t: Throwable? = null)
+        fun logout()
     }
 
     interface Presenter {
