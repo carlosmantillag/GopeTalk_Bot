@@ -6,14 +6,36 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
+/**
+ * Interface para verificar permisos - permite testing sin Robolectric
+ */
+interface PermissionChecker {
+    fun checkPermission(context: Context, permission: String): Int
+    fun getSdkVersion(): Int
+}
+
+/**
+ * Implementación real del PermissionChecker
+ */
+class AndroidPermissionChecker : PermissionChecker {
+    override fun checkPermission(context: Context, permission: String): Int {
+        return ContextCompat.checkSelfPermission(context, permission)
+    }
+    
+    override fun getSdkVersion(): Int {
+        return Build.VERSION.SDK_INT
+    }
+}
+
 class PermissionDataSource(
-    private val context: Context
+    private val context: Context,
+    private val permissionChecker: PermissionChecker = AndroidPermissionChecker()
 ) {
     fun getRequiredPermissions(): List<String> {
         return mutableListOf(
             Manifest.permission.RECORD_AUDIO
         ).apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (permissionChecker.getSdkVersion() >= Build.VERSION_CODES.TIRAMISU) {
                 add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
@@ -21,7 +43,7 @@ class PermissionDataSource(
 
     fun areAllPermissionsGranted(): Boolean {
         return getRequiredPermissions().all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+            permissionChecker.checkPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 }

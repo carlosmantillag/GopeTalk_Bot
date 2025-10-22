@@ -1,5 +1,8 @@
 package com.example.gopetalk_bot
 
+import com.example.gopetalk_bot.data.datasources.local.PermissionDataSourceTest
+import com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSourceTest
+import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSourceTest
 import com.example.gopetalk_bot.data.datasources.local.UserPreferencesTest
 import com.example.gopetalk_bot.data.datasources.remote.WebSocketDataSourceTest
 import com.example.gopetalk_bot.data.repositories.*
@@ -37,12 +40,14 @@ import org.junit.runners.Suite
     ApiResponseTest::class,
     AudioDataTest::class,
     AudioLevelTest::class,
-    AudioFormatTest::class,
     PermissionStatusTest::class,
     
     // Data Layer - DataSources
     UserPreferencesTest::class,
     WebSocketDataSourceTest::class,
+    PermissionDataSourceTest::class,
+    TextToSpeechDataSourceTest::class,
+    SpeechRecognizerDataSourceTest::class,
     
     // Data Layer - Repositories
     UserRepositoryImplTest::class,
@@ -50,7 +55,6 @@ import org.junit.runners.Suite
     ApiRepositoryImplTest::class,
     TextToSpeechRepositoryImplTest::class,
     WebSocketRepositoryImplTest::class,
-    AudioPlayerRepositoryImplTest::class,
     AudioRepositoryImplTest::class,
     
     // Presentation Layer - Common

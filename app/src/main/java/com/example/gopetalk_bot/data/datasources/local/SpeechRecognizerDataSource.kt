@@ -6,13 +6,72 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.util.Log
 import java.util.Locale
 
+/**
+ * Interface para el reconocedor de voz - permite testing sin Robolectric
+ */
+interface SpeechRecognizerWrapper {
+    fun setRecognitionListener(listener: RecognitionListener)
+    fun startListening(intent: Intent)
+    fun stopListening()
+    fun destroy()
+}
+
+/**
+ * Implementación real del SpeechRecognizerWrapper
+ */
+class AndroidSpeechRecognizerWrapper(private val recognizer: SpeechRecognizer) : SpeechRecognizerWrapper {
+    override fun setRecognitionListener(listener: RecognitionListener) {
+        recognizer.setRecognitionListener(listener)
+    }
+    
+    override fun startListening(intent: Intent) {
+        recognizer.startListening(intent)
+    }
+    
+    override fun stopListening() {
+        recognizer.stopListening()
+    }
+    
+    override fun destroy() {
+        recognizer.destroy()
+    }
+}
+
+/**
+ * Factory para crear SpeechRecognizerWrapper e Intent
+ */
+interface SpeechRecognizerFactory {
+    fun isRecognitionAvailable(context: Context): Boolean
+    fun createRecognizer(context: Context): SpeechRecognizerWrapper
+    fun createRecognitionIntent(): Intent
+}
+
+class AndroidSpeechRecognizerFactory : SpeechRecognizerFactory {
+    override fun isRecognitionAvailable(context: Context): Boolean {
+        return SpeechRecognizer.isRecognitionAvailable(context)
+    }
+    
+    override fun createRecognizer(context: Context): SpeechRecognizerWrapper {
+        return AndroidSpeechRecognizerWrapper(SpeechRecognizer.createSpeechRecognizer(context))
+    }
+    
+    override fun createRecognitionIntent(): Intent {
+        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+        }
+    }
+}
+
 class SpeechRecognizerDataSource(
-    private val context: Context
+    private val context: Context,
+    private val factory: SpeechRecognizerFactory = AndroidSpeechRecognizerFactory()
 ) {
-    private var speechRecognizer: SpeechRecognizer? = null
+    private var speechRecognizer: SpeechRecognizerWrapper? = null
     private var isListening = false
 
     companion object {
@@ -24,25 +83,22 @@ class SpeechRecognizerDataSource(
         onError: (String) -> Unit
     ) {
         if (isListening) {
-            Log.w(TAG, "Already listening")
             return
         }
 
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+        if (!factory.isRecognitionAvailable(context)) {
             onError("Speech recognition not available")
             return
         }
 
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        speechRecognizer = factory.createRecognizer(context)
         
         val recognitionListener = object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                Log.d(TAG, "Ready for speech")
                 isListening = true
             }
 
             override fun onBeginningOfSpeech() {
-                Log.d(TAG, "Beginning of speech")
             }
 
             override fun onRmsChanged(rmsdB: Float) {}
@@ -50,7 +106,6 @@ class SpeechRecognizerDataSource(
             override fun onBufferReceived(buffer: ByteArray?) {}
 
             override fun onEndOfSpeech() {
-                Log.d(TAG, "End of speech")
                 isListening = false
             }
 
@@ -68,7 +123,6 @@ class SpeechRecognizerDataSource(
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
                     else -> "Unknown error"
                 }
-                Log.e(TAG, "Recognition error: $errorMessage")
                 onError(errorMessage)
             }
 
@@ -77,7 +131,6 @@ class SpeechRecognizerDataSource(
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (matches != null && matches.isNotEmpty()) {
                     val recognizedText = matches[0]
-                    Log.d(TAG, "Recognized: $recognizedText")
                     onResult(recognizedText)
                 } else {
                     onError("No results")
@@ -91,22 +144,14 @@ class SpeechRecognizerDataSource(
 
         speechRecognizer?.setRecognitionListener(recognitionListener)
 
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-        }
-
+        val intent = factory.createRecognitionIntent()
         speechRecognizer?.startListening(intent)
-        Log.d(TAG, "Started listening")
     }
 
     fun stopListening() {
         if (isListening) {
             speechRecognizer?.stopListening()
             isListening = false
-            Log.d(TAG, "Stopped listening")
         }
     }
 
@@ -114,6 +159,5 @@ class SpeechRecognizerDataSource(
         speechRecognizer?.destroy()
         speechRecognizer = null
         isListening = false
-        Log.d(TAG, "Released")
     }
 }

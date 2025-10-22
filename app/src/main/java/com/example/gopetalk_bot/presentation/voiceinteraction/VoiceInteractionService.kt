@@ -74,7 +74,10 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         ApiRepositoryImpl(RemoteDataSource(), userPreferences)
 
     private fun createTtsRepository() = TextToSpeechRepositoryImpl(
-        TextToSpeechDataSource(this) { error -> logError("TTS Error: $error") }
+        TextToSpeechDataSource(
+            context = this,
+            onInitError = { error -> logError("TTS Error: $error") }
+        )
     )
 
     private fun createWebSocketRepository() = WebSocketRepositoryImpl(WebSocketDataSource())

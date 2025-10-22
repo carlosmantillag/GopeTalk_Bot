@@ -90,9 +90,10 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
         val remoteDataSource = RemoteDataSource()
         val apiRepository = ApiRepositoryImpl(remoteDataSource, userPreferences)
 
-        val ttsDataSource = TextToSpeechDataSource(this) { error ->
-            logError("TTS Error: $error")
-        }
+        val ttsDataSource = TextToSpeechDataSource(
+            context = this,
+            onInitError = { error -> logError("TTS Error: $error") }
+        )
         val ttsRepository = TextToSpeechRepositoryImpl(ttsDataSource)
 
         val sendAuthenticationUseCase = SendAuthenticationUseCase(apiRepository)
