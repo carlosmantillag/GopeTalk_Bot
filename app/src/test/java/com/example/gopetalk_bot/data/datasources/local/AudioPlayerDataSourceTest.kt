@@ -95,4 +95,25 @@ class AudioPlayerDataSourceTest {
         // Should not throw exception
         dataSource.release()
     }
+
+    // ==================== Additional Edge Cases ====================
+
+    @Test
+    fun `isPlaying should return false after release`() {
+        dataSource.release()
+        
+        val result = dataSource.isPlaying()
+        
+        assertThat(result).isFalse()
+    }
+
+    @Test
+    fun `multiple release calls should not crash`() {
+        dataSource.release()
+        dataSource.release()
+        dataSource.release()
+        
+        // Should not throw exception
+        assertThat(dataSource.isPlaying()).isFalse()
+    }
 }
