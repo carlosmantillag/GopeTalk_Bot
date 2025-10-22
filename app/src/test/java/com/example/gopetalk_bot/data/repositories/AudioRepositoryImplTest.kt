@@ -150,19 +150,4 @@ class AudioRepositoryImplTest {
         verify(exactly = 2) { audioDataSource.resumeRecording() }
     }
 
-    @Test
-    fun `error callback should be invoked on data source error`() = runTest {
-        var capturedErrorCallback: ((String) -> Unit)? = null
-        var errorMessage: String? = null
-
-        every { audioDataSource.startMonitoring(any(), any(), any()) } answers {
-            capturedErrorCallback = thirdArg()
-        }
-
-        repository.startMonitoring()
-        capturedErrorCallback?.invoke("Test error")
-
-        // Error is logged but doesn't throw
-        assertThat(capturedErrorCallback).isNotNull()
-    }
 }

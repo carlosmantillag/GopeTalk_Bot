@@ -17,7 +17,8 @@ class AuthenticationPresenter(
     private val setTtsListenerUseCase: SetTtsListenerUseCase,
     private val shutdownTtsUseCase: ShutdownTtsUseCase,
     private val userPreferences: UserPreferences,
-    private val checkPermissionsUseCase: CheckPermissionsUseCase
+    private val checkPermissionsUseCase: CheckPermissionsUseCase,
+    private val mainThreadHandler: Handler = Handler(Looper.getMainLooper())
 ) : AuthenticationContract.Presenter {
 
     private companion object {
@@ -50,8 +51,6 @@ class AuthenticationPresenter(
     private var authState: AuthState = AuthState.WAITING_FOR_NAME
     private var userName: String? = null
     private var userPin: Int? = null
-
-    private val mainThreadHandler = Handler(Looper.getMainLooper())
     private var isTtsSpeaking = false
     private val gson = Gson()
 

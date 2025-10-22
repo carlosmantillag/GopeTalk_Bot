@@ -10,4 +10,9 @@ object AudioRmsMonitor {
     fun updateRmsDb(rmsDb: Float) {
         _rmsDbFlow.value = rmsDb
     }
+    
+    // For testing purposes
+    internal fun reset() {
+        _rmsDbFlow.value = 0f
+    }
 }

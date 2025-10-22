@@ -1,6 +1,7 @@
 package com.example.gopetalk_bot
 
 import com.example.gopetalk_bot.data.datasources.local.UserPreferencesTest
+import com.example.gopetalk_bot.data.datasources.remote.WebSocketDataSourceTest
 import com.example.gopetalk_bot.data.repositories.*
 import com.example.gopetalk_bot.domain.entities.*
 import com.example.gopetalk_bot.domain.usecases.*
@@ -41,6 +42,7 @@ import org.junit.runners.Suite
     
     // Data Layer - DataSources
     UserPreferencesTest::class,
+    WebSocketDataSourceTest::class,
     
     // Data Layer - Repositories
     UserRepositoryImplTest::class,
@@ -51,12 +53,12 @@ import org.junit.runners.Suite
     AudioPlayerRepositoryImplTest::class,
     AudioRepositoryImplTest::class,
     
+    // Presentation Layer - Common
+    AudioRmsMonitorTest::class,
+    
     // Presentation Layer - Presenters
     AuthenticationPresenterTest::class,
     MainPresenterTest::class,
-    VoiceInteractionPresenterTest::class,
-    
-    // Presentation Layer - Common
-    AudioRmsMonitorTest::class
+    VoiceInteractionPresenterTest::class
 )
 class AllUnitTestsSuite

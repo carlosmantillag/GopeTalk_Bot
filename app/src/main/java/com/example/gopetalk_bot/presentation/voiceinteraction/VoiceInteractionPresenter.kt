@@ -32,7 +32,8 @@ class VoiceInteractionPresenter(
     private val playAudioFileUseCase: PlayAudioFileUseCase,
     private val updateWebSocketChannelUseCase: UpdateWebSocketChannelUseCase,
     private val pollAudioUseCase: PollAudioUseCase,
-    private val userPreferences: UserPreferences
+    private val userPreferences: UserPreferences,
+    private val mainThreadHandler: Handler = Handler(Looper.getMainLooper())
 ) : VoiceInteractionContract.Presenter {
 
     private companion object {
@@ -44,7 +45,6 @@ class VoiceInteractionPresenter(
     }
 
     private val presenterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val mainThreadHandler = Handler(Looper.getMainLooper())
     private val gson = Gson()
     
     @Volatile

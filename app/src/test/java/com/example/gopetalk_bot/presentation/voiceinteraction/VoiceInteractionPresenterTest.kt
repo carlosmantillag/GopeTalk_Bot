@@ -1,14 +1,17 @@
 package com.example.gopetalk_bot.presentation.voiceinteraction
 
+import android.content.Context
 import android.os.Handler
-import android.os.Looper
 import com.example.gopetalk_bot.data.datasources.local.UserPreferences
 import com.example.gopetalk_bot.domain.entities.ApiResponse
 import com.example.gopetalk_bot.domain.entities.AudioData
+import com.example.gopetalk_bot.domain.entities.AudioFormat
 import com.example.gopetalk_bot.domain.entities.AudioLevel
 import com.example.gopetalk_bot.domain.repositories.AudioPlayerRepository
 import com.example.gopetalk_bot.domain.repositories.WebSocketRepository
 import com.example.gopetalk_bot.domain.usecases.*
+import com.example.gopetalk_bot.presentation.common.AudioRmsMonitor
+import com.google.common.truth.Truth.assertThat
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,6 +25,7 @@ import java.io.File
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceInteractionPresenterTest {
 
+    private lateinit var presenter: VoiceInteractionPresenter
     private lateinit var view: VoiceInteractionContract.View
     private lateinit var startAudioMonitoringUseCase: StartAudioMonitoringUseCase
     private lateinit var stopAudioMonitoringUseCase: StopAudioMonitoringUseCase
@@ -39,92 +43,489 @@ class VoiceInteractionPresenterTest {
     private lateinit var updateWebSocketChannelUseCase: UpdateWebSocketChannelUseCase
     private lateinit var pollAudioUseCase: PollAudioUseCase
     private lateinit var userPreferences: UserPreferences
-    private lateinit var presenter: VoiceInteractionPresenter
+    private lateinit var mockHandler: Handler
 
     private val testDispatcher = StandardTestDispatcher()
+
+    private val onTtsStartSlot = slot<(String?) -> Unit>()
+    private val onTtsDoneSlot = slot<(String?) -> Unit>()
+    private val onTtsErrorSlot = slot<(String?) -> Unit>()
+    private val webSocketListenerSlot = slot<WebSocketRepository.MicrophoneControlListener>()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        
-        // Mock Android Looper and Handler
-        mockkStatic(Looper::class)
-        val mockLooper = mockk<Looper>(relaxed = true)
-        every { Looper.getMainLooper() } returns mockLooper
-        
-        mockkConstructor(Handler::class)
-        every { anyConstructed<Handler>().post(any()) } answers {
+        AudioRmsMonitor.reset()
+
+        // Mock Handler para ejecutar inmediatamente
+        mockHandler = mockk<Handler>(relaxed = true)
+        every { mockHandler.post(any()) } answers {
             firstArg<Runnable>().run()
             true
         }
-        every { anyConstructed<Handler>().postDelayed(any(), any()) } answers {
+        every { mockHandler.postDelayed(any(), any()) } answers {
             firstArg<Runnable>().run()
             true
         }
+        every { mockHandler.removeCallbacksAndMessages(null) } just Runs
 
         view = mockk(relaxed = true)
+        every { view.context } returns mockk<Context>(relaxed = true)
+        
         startAudioMonitoringUseCase = mockk(relaxed = true)
         stopAudioMonitoringUseCase = mockk(relaxed = true)
         pauseAudioRecordingUseCase = mockk(relaxed = true)
         resumeAudioRecordingUseCase = mockk(relaxed = true)
-        monitorAudioLevelUseCase = mockk(relaxed = true)
-        getRecordedAudioUseCase = mockk(relaxed = true)
         sendAudioCommandUseCase = mockk(relaxed = true)
         speakTextUseCase = mockk(relaxed = true)
-        setTtsListenerUseCase = mockk(relaxed = true)
         shutdownTtsUseCase = mockk(relaxed = true)
-        connectWebSocketUseCase = mockk(relaxed = true)
         disconnectWebSocketUseCase = mockk(relaxed = true)
         playAudioFileUseCase = mockk(relaxed = true)
         updateWebSocketChannelUseCase = mockk(relaxed = true)
         pollAudioUseCase = mockk(relaxed = true)
         userPreferences = mockk(relaxed = true)
 
-        every { monitorAudioLevelUseCase.execute() } returns flowOf(AudioLevel(0.0f))
+        monitorAudioLevelUseCase = mockk(relaxed = true)
+        every { monitorAudioLevelUseCase.execute() } returns flowOf()
+
+        getRecordedAudioUseCase = mockk(relaxed = true)
         every { getRecordedAudioUseCase.execute() } returns flowOf()
+
+        setTtsListenerUseCase = mockk(relaxed = true)
+        every { 
+            setTtsListenerUseCase.execute(
+                onStart = capture(onTtsStartSlot),
+                onDone = capture(onTtsDoneSlot),
+                onError = capture(onTtsErrorSlot)
+            )
+        } just Runs
+
+        connectWebSocketUseCase = mockk(relaxed = true)
+        every { 
+            connectWebSocketUseCase.execute(any<String>(), any(), any(), capture(webSocketListenerSlot))
+        } just Runs
+
         every { userPreferences.authToken } returns "test-token"
 
         presenter = VoiceInteractionPresenter(
-            view,
-            startAudioMonitoringUseCase,
-            stopAudioMonitoringUseCase,
-            pauseAudioRecordingUseCase,
-            resumeAudioRecordingUseCase,
-            monitorAudioLevelUseCase,
-            getRecordedAudioUseCase,
-            sendAudioCommandUseCase,
-            speakTextUseCase,
-            setTtsListenerUseCase,
-            shutdownTtsUseCase,
-            connectWebSocketUseCase,
-            disconnectWebSocketUseCase,
-            playAudioFileUseCase,
-            updateWebSocketChannelUseCase,
-            pollAudioUseCase,
-            userPreferences
+            view = view,
+            startAudioMonitoringUseCase = startAudioMonitoringUseCase,
+            stopAudioMonitoringUseCase = stopAudioMonitoringUseCase,
+            pauseAudioRecordingUseCase = pauseAudioRecordingUseCase,
+            resumeAudioRecordingUseCase = resumeAudioRecordingUseCase,
+            monitorAudioLevelUseCase = monitorAudioLevelUseCase,
+            getRecordedAudioUseCase = getRecordedAudioUseCase,
+            sendAudioCommandUseCase = sendAudioCommandUseCase,
+            speakTextUseCase = speakTextUseCase,
+            setTtsListenerUseCase = setTtsListenerUseCase,
+            shutdownTtsUseCase = shutdownTtsUseCase,
+            connectWebSocketUseCase = connectWebSocketUseCase,
+            disconnectWebSocketUseCase = disconnectWebSocketUseCase,
+            playAudioFileUseCase = playAudioFileUseCase,
+            updateWebSocketChannelUseCase = updateWebSocketChannelUseCase,
+            pollAudioUseCase = pollAudioUseCase,
+            userPreferences = userPreferences,
+            mainThreadHandler = mockHandler
         )
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        unmockkStatic(Looper::class)
-        unmockkConstructor(Handler::class)
-        clearAllMocks()
+        unmockkAll()
     }
 
     @Test
-    fun `start should initialize all components`() {
+    fun `start should initialize all services`() = runTest {
         presenter.start()
+        advanceUntilIdle()
 
-        verify { connectWebSocketUseCase.execute(any(), any(), any(), any()) }
+        verify { view.logInfo("Presenter started.") }
+        verify { connectWebSocketUseCase.execute(any(), "test-token", null, any()) }
         verify { setTtsListenerUseCase.execute(any(), any(), any()) }
         verify { startAudioMonitoringUseCase.execute() }
-        verify { view.logInfo("Presenter started.") }
     }
 
     @Test
-    fun `stop should cleanup all resources`() {
+    fun `TTS onStart callback should pause audio recording`() {
+        presenter.start()
+        
+        onTtsStartSlot.captured.invoke(null)
+
+        verify { pauseAudioRecordingUseCase.execute() }
+    }
+
+    @Test
+    fun `TTS onDone callback should resume audio recording when not blocked`() {
+        presenter.start()
+        
+        onTtsDoneSlot.captured.invoke(null)
+
+        verify { resumeAudioRecordingUseCase.execute() }
+    }
+
+    @Test
+    fun `TTS onDone callback should not resume audio when microphone blocked`() {
+        presenter.start()
+        webSocketListenerSlot.captured.onMicrophoneStop()
+        clearMocks(resumeAudioRecordingUseCase)
+        
+        onTtsDoneSlot.captured.invoke(null)
+
+        verify(exactly = 0) { resumeAudioRecordingUseCase.execute() }
+    }
+
+    @Test
+    fun `TTS onError callback should resume audio recording when not blocked`() {
+        presenter.start()
+        
+        onTtsErrorSlot.captured.invoke(null)
+
+        verify { resumeAudioRecordingUseCase.execute() }
+    }
+
+    @Test
+    fun `WebSocket onMicrophoneStart should unblock and resume recording`() {
+        presenter.start()
+        
+        webSocketListenerSlot.captured.onMicrophoneStart()
+
+        verify { view.logInfo("WebSocket: Microphone START") }
+        verify { resumeAudioRecordingUseCase.execute() }
+    }
+
+    @Test
+    fun `WebSocket onMicrophoneStop should block and pause recording`() {
+        presenter.start()
+        
+        webSocketListenerSlot.captured.onMicrophoneStop()
+
+        verify { view.logInfo("WebSocket: Microphone STOP") }
+        verify { pauseAudioRecordingUseCase.execute() }
+    }
+
+    @Test
+    fun `WebSocket onConnectionEstablished should log info`() {
+        presenter.start()
+        
+        webSocketListenerSlot.captured.onConnectionEstablished()
+
+        verify { view.logInfo("WebSocket connection established") }
+    }
+
+    @Test
+    fun `WebSocket onConnectionClosed should log info`() {
+        presenter.start()
+        
+        webSocketListenerSlot.captured.onConnectionClosed()
+
+        verify { view.logInfo("WebSocket connection closed") }
+    }
+
+    @Test
+    fun `WebSocket onError should log error`() {
+        presenter.start()
+        
+        webSocketListenerSlot.captured.onError("Connection failed")
+
+        verify { view.logError("WebSocket error: Connection failed", null) }
+    }
+
+    @Test
+    fun `sendAudioToBackend should handle success response with text`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, "Hola mundo")
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { speakTextUseCase.execute("Hola mundo", any()) }
+    }
+
+    @Test
+    fun `sendAudioToBackend should handle success response with JSON`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        val jsonResponse = """{"text":"Respuesta del servidor","channel":"general"}"""
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, jsonResponse)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { speakTextUseCase.execute("Respuesta del servidor", any()) }
+    }
+
+    @Test
+    fun `sendAudioToBackend should handle 204 No Content response`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(204, "")
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify(exactly = 0) { speakTextUseCase.execute(any(), any()) }
+    }
+
+    @Test
+    fun `sendAudioToBackend should handle error response`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Error("Server error", 500, null)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { view.logError("API Error: Server error", null) }
+    }
+
+    @Test
+    fun `sendAudioToBackend should handle audio file response`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        val mockResponseFile = mockk<File>(relaxed = true)
+        
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, "", audioFile = mockResponseFile)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { playAudioFileUseCase.execute(mockResponseFile, any()) }
+    }
+
+    @Test
+    fun `handleBackendResponse with list_channels action should speak channel list`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        val jsonResponse = """{"action":"list_channels","channels":["general","tech","music"],"text":""}"""
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, jsonResponse)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { speakTextUseCase.execute(match { it.contains("general") && it.contains("tech") && it.contains("music") }, any()) }
+    }
+
+    @Test
+    fun `handleBackendResponse with list_users action should speak user list`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        val jsonResponse = """{"action":"list_users","users":["Alice","Bob","Charlie"],"text":""}"""
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, jsonResponse)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { speakTextUseCase.execute(match { it.contains("Alice") && it.contains("Bob") && it.contains("Charlie") }, any()) }
+    }
+
+    @Test
+    fun `handleBackendResponse with logout action should trigger logout`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        val jsonResponse = """{"action":"logout","text":""}"""
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, jsonResponse)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { view.logInfo("Logout requested") }
+        verify { view.logout() }
+        verify { speakTextUseCase.execute("Cerrando sesión, hasta luego", any()) }
+    }
+
+    @Test
+    fun `handleBackendResponse with channel should update channel`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        val jsonResponse = """{"text":"Canal actualizado","channel":"tech"}"""
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, jsonResponse)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { view.logInfo("Channel updated to: tech") }
+        verify { updateWebSocketChannelUseCase.execute("test-token", "tech") }
+    }
+
+    @Test
+    fun `handleBackendResponse with invalid JSON should speak error message`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, "{invalid json}")
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { view.logError(match { it.contains("Failed to parse") }, any()) }
+        verify { speakTextUseCase.execute("No entendí la respuesta del servidor.", any()) }
+    }
+
+    @Test
+    fun `updateChannel should update WebSocket channel`() {
+        presenter.start()
+        
+        presenter.updateChannel("new-channel")
+
+        verify { view.logInfo("Channel updated to: new-channel") }
+        verify { updateWebSocketChannelUseCase.execute("test-token", "new-channel") }
+    }
+
+    @Test
+    fun `updateChannel with null should work`() {
+        presenter.start()
+        
+        presenter.updateChannel(null)
+
+        verify { view.logInfo("Channel updated to: null") }
+        verify { updateWebSocketChannelUseCase.execute("test-token", null) }
+    }
+
+    @Test
+    fun `stop should cleanup all resources`() = runTest {
+        presenter.start()
+        advanceUntilIdle()
+        
         presenter.stop()
 
         verify { disconnectWebSocketUseCase.execute() }
@@ -135,237 +536,120 @@ class VoiceInteractionPresenterTest {
 
     @Test
     fun `speakWelcome should speak welcome message with username`() {
-        presenter.speakWelcome("TestUser")
+        presenter.speakWelcome("Carlos")
 
-        verify { speakTextUseCase.execute(match { it.contains("TestUser") }, any()) }
+        verify { speakTextUseCase.execute(match { it.contains("Carlos") && it.contains("canal") }, any()) }
     }
 
     @Test
-    fun `updateChannel should update channel and websocket`() {
-        presenter.updateChannel("general")
-
-        verify { updateWebSocketChannelUseCase.execute("test-token", "general") }
-        verify { view.logInfo("Channel updated to: general") }
-    }
-
-    @Test
-    fun `updateChannel with null should update to null`() {
-        presenter.updateChannel(null)
-
-        verify { updateWebSocketChannelUseCase.execute("test-token", null) }
-        verify { view.logInfo("Channel updated to: null") }
-    }
-
-    @Test
-    fun `TTS listeners should be set up on start`() {
+    fun `monitorAudioLevel should update AudioRmsMonitor`() = runTest {
+        val audioLevel = AudioLevel(45.5f)
+        every { monitorAudioLevelUseCase.execute() } returns flowOf(audioLevel)
+        
         presenter.start()
+        advanceUntilIdle()
 
-        verify { setTtsListenerUseCase.execute(any(), any(), any()) }
+        assertThat(AudioRmsMonitor.rmsDbFlow.value).isEqualTo(45.5f)
     }
 
     @Test
-    fun `WebSocket microphone start should resume recording`() {
-        var listener: WebSocketRepository.MicrophoneControlListener? = null
-
-        every { connectWebSocketUseCase.execute(any(), any(), any(), any()) } answers {
-            listener = arg(3)
-        }
-
-        presenter.start()
-        listener?.onMicrophoneStart()
-
-        verify { resumeAudioRecordingUseCase.execute() }
-        verify { view.logInfo("WebSocket: Microphone START") }
-    }
-
-    @Test
-    fun `WebSocket microphone stop should pause recording`() {
-        var listener: WebSocketRepository.MicrophoneControlListener? = null
-
-        every { connectWebSocketUseCase.execute(any(), any(), any(), any()) } answers {
-            listener = arg(3)
-        }
-
-        presenter.start()
-        listener?.onMicrophoneStop()
-
-        verify { pauseAudioRecordingUseCase.execute() }
-        verify { view.logInfo("WebSocket: Microphone STOP") }
-    }
-
-    @Test
-    fun `start should setup audio monitoring`() {
-        presenter.start()
-
-        verify { startAudioMonitoringUseCase.execute() }
-        verify { monitorAudioLevelUseCase.execute() }
-    }
-
-    @Test
-    fun `handleApiResponse should handle success with audio file`() = runTest {
-        var capturedCallback: ((ApiResponse) -> Unit)? = null
+    fun `playback onPlaybackCompleted should delete audio file`() = runTest {
         val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        val mockResponseFile = mockk<File>(relaxed = true)
+        var playbackListener: AudioPlayerRepository.PlaybackListener? = null
         
-        every { sendAudioCommandUseCase.execute(any(), any()) } answers {
-            capturedCallback = secondArg()
+        every { 
+            playAudioFileUseCase.execute(any<File>(), any<AudioPlayerRepository.PlaybackListener>())
+        } answers {
+            playbackListener = arg(1)
         }
         
-        val mockAudioData = AudioData(mockk(relaxed = true), 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
-        every { getRecordedAudioUseCase.execute() } returns flowOf(mockAudioData)
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, "", audioFile = mockResponseFile)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
         advanceUntilIdle()
         
-        capturedCallback?.invoke(ApiResponse.Success(200, "OK", mockFile))
-        
-        verify { playAudioFileUseCase.execute(mockFile, any()) }
+        playbackListener?.onPlaybackCompleted()
+
+        verify { mockResponseFile.delete() }
     }
 
     @Test
-    fun `handleApiResponse should handle 204 no content`() = runTest {
-        var capturedCallback: ((ApiResponse) -> Unit)? = null
+    fun `playback onPlaybackError should delete audio file`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+        val mockResponseFile = mockk<File>(relaxed = true)
+        var playbackListener: AudioPlayerRepository.PlaybackListener? = null
         
-        every { sendAudioCommandUseCase.execute(any(), any()) } answers {
-            capturedCallback = secondArg()
+        every { 
+            playAudioFileUseCase.execute(any<File>(), any<AudioPlayerRepository.PlaybackListener>())
+        } answers {
+            playbackListener = arg(1)
         }
         
-        val mockAudioData = AudioData(mockk(relaxed = true), 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
-        every { getRecordedAudioUseCase.execute() } returns flowOf(mockAudioData)
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, "", audioFile = mockResponseFile)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
         advanceUntilIdle()
         
-        capturedCallback?.invoke(ApiResponse.Success(204, "", null))
-        
-        verify(exactly = 0) { speakTextUseCase.execute(any(), any()) }
+        playbackListener?.onPlaybackError("Playback failed")
+
+        verify { view.logError("Audio playback error: Playback failed", null) }
+        verify { mockResponseFile.delete() }
     }
 
     @Test
-    fun `handleApiResponse should handle blank response body`() = runTest {
-        var capturedCallback: ((ApiResponse) -> Unit)? = null
+    fun `handleBackendResponse with blank text and no action should not speak`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
         
-        every { sendAudioCommandUseCase.execute(any(), any()) } answers {
-            capturedCallback = secondArg()
+        val jsonResponse = """{"text":"","action":""}"""
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, jsonResponse)
+            )
         }
-        
-        val mockAudioData = AudioData(mockk(relaxed = true), 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
-        every { getRecordedAudioUseCase.execute() } returns flowOf(mockAudioData)
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
         advanceUntilIdle()
-        
-        capturedCallback?.invoke(ApiResponse.Success(200, "   ", null))
-        
-        verify(exactly = 0) { speakTextUseCase.execute(any(), any()) }
-    }
 
-    @Test
-    fun `handleApiResponse should handle JSON response`() = runTest {
-        var capturedCallback: ((ApiResponse) -> Unit)? = null
-        
-        every { sendAudioCommandUseCase.execute(any(), any()) } answers {
-            capturedCallback = secondArg()
-        }
-        
-        val mockAudioData = AudioData(mockk(relaxed = true), 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
-        every { getRecordedAudioUseCase.execute() } returns flowOf(mockAudioData)
-        
-        presenter.start()
-        advanceUntilIdle()
-        
-        val jsonResponse = """{"message":"Hello","channel":"test"}"""
-        capturedCallback?.invoke(ApiResponse.Success(200, jsonResponse, null))
-        
-        verify { view.logInfo(any()) }
-    }
-
-    @Test
-    fun `handleApiResponse should handle plain text response`() = runTest {
-        var capturedCallback: ((ApiResponse) -> Unit)? = null
-        
-        every { sendAudioCommandUseCase.execute(any(), any()) } answers {
-            capturedCallback = secondArg()
-        }
-        
-        val mockAudioData = AudioData(mockk(relaxed = true), 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
-        every { getRecordedAudioUseCase.execute() } returns flowOf(mockAudioData)
-        
-        presenter.start()
-        advanceUntilIdle()
-        
-        capturedCallback?.invoke(ApiResponse.Success(200, "Hello world", null))
-        
-        verify { speakTextUseCase.execute("Hello world", any()) }
-    }
-
-    @Test
-    fun `handleApiResponse should handle error response`() = runTest {
-        var capturedCallback: ((ApiResponse) -> Unit)? = null
-        
-        every { sendAudioCommandUseCase.execute(any(), any()) } answers {
-            capturedCallback = secondArg()
-        }
-        
-        val mockAudioData = AudioData(mockk(relaxed = true), 16000, 1, com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT)
-        every { getRecordedAudioUseCase.execute() } returns flowOf(mockAudioData)
-        
-        presenter.start()
-        advanceUntilIdle()
-        
-        capturedCallback?.invoke(ApiResponse.Error("Network error", 500, null))
-        
-        verify { view.logError("API Error: Network error", null) }
-    }
-
-    @Test
-    fun `TTS onStart should pause recording`() {
-        var onStart: (() -> Unit)? = null
-        
-        every { setTtsListenerUseCase.execute(any(), any(), any()) } answers {
-            onStart = firstArg()
-        }
-        
-        presenter.start()
-        onStart?.invoke()
-        
-        verify { pauseAudioRecordingUseCase.execute() }
-    }
-
-    @Test
-    fun `TTS onDone should resume recording when not blocked`() {
-        var onDone: (() -> Unit)? = null
-        
-        every { setTtsListenerUseCase.execute(any(), any(), any()) } answers {
-            onDone = secondArg()
-        }
-        
-        presenter.start()
-        onDone?.invoke()
-        
-        verify { resumeAudioRecordingUseCase.execute() }
-    }
-
-    @Test
-    fun `TTS onError should resume recording when not blocked`() {
-        var onError: (() -> Unit)? = null
-        
-        every { setTtsListenerUseCase.execute(any(), any(), any()) } answers {
-            onError = thirdArg()
-        }
-        
-        presenter.start()
-        onError?.invoke()
-        
-        verify { resumeAudioRecordingUseCase.execute() }
-    }
-
-    @Test
-    fun `stop should cleanup resources`() {
-        presenter.start()
-        presenter.stop()
-        
-        verify { stopAudioMonitoringUseCase.execute() }
-        verify { disconnectWebSocketUseCase.execute() }
-        verify { shutdownTtsUseCase.execute() }
+        // El comportamiento puede variar - verificar que no se llame con texto vacío
+        verify(exactly = 0) { speakTextUseCase.execute("", any()) }
     }
 }

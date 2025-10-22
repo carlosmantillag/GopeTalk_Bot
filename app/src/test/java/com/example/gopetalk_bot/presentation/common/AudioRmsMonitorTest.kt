@@ -4,10 +4,16 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioRmsMonitorTest {
+
+    @Before
+    fun setup() {
+        AudioRmsMonitor.reset()
+    }
 
     @Test
     fun `initial rmsDb should be zero`() = runTest {

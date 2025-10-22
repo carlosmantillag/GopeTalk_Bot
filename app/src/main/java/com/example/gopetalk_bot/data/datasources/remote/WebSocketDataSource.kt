@@ -5,7 +5,12 @@ import okhttp3.*
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class WebSocketDataSource {
+class WebSocketDataSource(
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MINUTES)
+        .build()
+) {
     
     private companion object {
         const val TAG = "WebSocketDataSource"
@@ -22,11 +27,6 @@ class WebSocketDataSource {
 
     private var webSocket: WebSocket? = null
     private var listener: MicrophoneControlListener? = null
-    
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.MINUTES)
-        .build()
 
     interface MicrophoneControlListener {
         fun onMicrophoneStart()
