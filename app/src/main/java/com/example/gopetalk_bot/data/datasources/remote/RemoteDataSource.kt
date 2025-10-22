@@ -18,7 +18,37 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class RemoteDataSource {
+/**
+ * Interface para ejecutar código en el hilo principal - permite testing
+ */
+interface MainThreadExecutor {
+    fun post(runnable: Runnable)
+}
+
+class AndroidMainThreadExecutor : MainThreadExecutor {
+    private val handler = Handler(Looper.getMainLooper())
+    override fun post(runnable: Runnable) {
+        handler.post(runnable)
+    }
+}
+
+/**
+ * Interface para operaciones con Base64 - permite testing
+ */
+interface Base64Decoder {
+    fun decode(str: String, flags: Int): ByteArray
+}
+
+class AndroidBase64Decoder : Base64Decoder {
+    override fun decode(str: String, flags: Int): ByteArray {
+        return Base64.decode(str, flags)
+    }
+}
+
+class RemoteDataSource(
+    private val mainThreadExecutor: MainThreadExecutor = AndroidMainThreadExecutor(),
+    private val base64Decoder: Base64Decoder = AndroidBase64Decoder()
+) {
     
     private companion object {
         const val TAG = "RemoteDataSource"
@@ -36,7 +66,6 @@ class RemoteDataSource {
         const val UNKNOWN = "unknown"
     }
 
-    private val handler = Handler(Looper.getMainLooper())
     private val gson = Gson()
     private val baseUrl = "http://${BuildConfig.BACKEND_HOST}/"
     
@@ -127,9 +156,9 @@ class RemoteDataSource {
             if (isAudioRelayResponse(responseBody.contentType(), bodyString)) {
                 handleAudioRelayResponse(bodyString, response.code(), callback)
             } else {
-                handler.post { callback.onSuccess(response.code(), bodyString, null) }
+                mainThreadExecutor.post { callback.onSuccess(response.code(), bodyString, null) }
             }
-        } ?: handler.post { callback.onSuccess(response.code(), "", null) }
+        } ?: mainThreadExecutor.post { callback.onSuccess(response.code(), "", null) }
     }
 
     private fun isAudioRelayResponse(contentType: MediaType?, body: String): Boolean {
@@ -139,11 +168,11 @@ class RemoteDataSource {
     private fun handleAudioRelayResponse(bodyString: String, statusCode: Int, callback: ApiCallback) {
         try {
             val audioRelay = gson.fromJson(bodyString, AudioRelayResponse::class.java)
-            val audioBytes = Base64.decode(audioRelay.audioBase64, Base64.DEFAULT)
+            val audioBytes = base64Decoder.decode(audioRelay.audioBase64, Base64.DEFAULT)
             val tempFile = File.createTempFile(TEMP_AUDIO_PREFIX, AUDIO_EXTENSION)
             tempFile.writeBytes(audioBytes)
             
-            handler.post { callback.onSuccess(statusCode, bodyString, tempFile) }
+            mainThreadExecutor.post { callback.onSuccess(statusCode, bodyString, tempFile) }
         } catch (e: Exception) {
             Log.e(TAG, "Error decoding audio relay response", e)
             postFailure(callback, "Error decoding audio: ${e.message}", e)
@@ -159,7 +188,7 @@ class RemoteDataSource {
     }
 
     private fun postFailure(callback: ApiCallback, message: String, cause: Throwable? = null) {
-        handler.post { callback.onFailure(IOException(message, cause)) }
+        mainThreadExecutor.post { callback.onFailure(IOException(message, cause)) }
     }
 
     private fun handleErrorResponse(response: retrofit2.Response<ResponseBody>, callback: ApiCallback) {
@@ -205,7 +234,7 @@ class RemoteDataSource {
                     input.copyTo(output)
                 }
             }
-            handler.post { callback.onSuccess(outputFile) }
+            mainThreadExecutor.post { callback.onSuccess(outputFile) }
         } catch (e: Exception) {
             Log.e(TAG, "Error saving audio file", e)
             postDownloadFailure(callback, "Error saving audio file: ${e.message}", e)
@@ -213,7 +242,7 @@ class RemoteDataSource {
     }
 
     private fun postDownloadFailure(callback: AudioDownloadCallback, message: String, cause: Throwable? = null) {
-        handler.post { callback.onFailure(IOException(message, cause)) }
+        mainThreadExecutor.post { callback.onFailure(IOException(message, cause)) }
     }
 
     fun sendAuthentication(nombre: String, pin: Int, callback: AuthCallback) {
@@ -242,7 +271,7 @@ class RemoteDataSource {
         val bodyString = response.body()?.string() ?: ""
         try {
             val authResponse = gson.fromJson(bodyString, AuthenticationResponse::class.java)
-            handler.post {
+            mainThreadExecutor.post {
                 callback.onSuccess(response.code(), authResponse.message, authResponse.token)
             }
         } catch (e: Exception) {
@@ -264,7 +293,7 @@ class RemoteDataSource {
         } else {
             IOException(message, cause)
         }
-        handler.post { callback.onFailure(exception) }
+        mainThreadExecutor.post { callback.onFailure(exception) }
     }
     
     class AuthenticationException(message: String, val statusCode: Int, cause: Throwable? = null) : IOException(message, cause)
@@ -277,7 +306,7 @@ class RemoteDataSource {
         override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
             when (response.code()) {
                 HTTP_OK -> handlePolledAudio(response, callback)
-                HTTP_NO_CONTENT -> handler.post { callback.onNoAudio() }
+                HTTP_NO_CONTENT -> mainThreadExecutor.post { callback.onNoAudio() }
                 else -> handlePollError(response, callback)
             }
         }
@@ -298,7 +327,7 @@ class RemoteDataSource {
                 val fromUserId = response.headers()[HEADER_AUDIO_FROM] ?: UNKNOWN
                 val channel = response.headers()[HEADER_CHANNEL] ?: UNKNOWN
 
-                handler.post { callback.onAudioReceived(tempFile, fromUserId, channel) }
+                mainThreadExecutor.post { callback.onAudioReceived(tempFile, fromUserId, channel) }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing polled audio", e)
                 postPollFailure(callback, "Error processing audio: ${e.message}", e)
@@ -313,6 +342,6 @@ class RemoteDataSource {
     }
 
     private fun postPollFailure(callback: AudioPollCallback, message: String, cause: Throwable? = null) {
-        handler.post { callback.onFailure(IOException(message, cause)) }
+        mainThreadExecutor.post { callback.onFailure(IOException(message, cause)) }
     }
 }

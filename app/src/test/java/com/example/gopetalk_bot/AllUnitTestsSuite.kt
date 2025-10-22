@@ -1,9 +1,12 @@
 package com.example.gopetalk_bot
 
+import com.example.gopetalk_bot.data.datasources.local.AudioDataSourceTest
 import com.example.gopetalk_bot.data.datasources.local.PermissionDataSourceTest
 import com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSourceTest
 import com.example.gopetalk_bot.data.datasources.local.TextToSpeechDataSourceTest
 import com.example.gopetalk_bot.data.datasources.local.UserPreferencesTest
+import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSourceEdgeCasesTest
+import com.example.gopetalk_bot.data.datasources.remote.RemoteDataSourceTest
 import com.example.gopetalk_bot.data.datasources.remote.WebSocketDataSourceTest
 import com.example.gopetalk_bot.data.repositories.*
 import com.example.gopetalk_bot.domain.entities.*
@@ -45,9 +48,12 @@ import org.junit.runners.Suite
     // Data Layer - DataSources
     UserPreferencesTest::class,
     WebSocketDataSourceTest::class,
+    RemoteDataSourceTest::class,
+    RemoteDataSourceEdgeCasesTest::class,
     PermissionDataSourceTest::class,
     TextToSpeechDataSourceTest::class,
     SpeechRecognizerDataSourceTest::class,
+    AudioDataSourceTest::class,
     
     // Data Layer - Repositories
     UserRepositoryImplTest::class,

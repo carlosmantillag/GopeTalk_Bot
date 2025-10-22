@@ -16,7 +16,23 @@ import kotlin.concurrent.thread
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-class AudioDataSource(private val context: Context) {
+/**
+ * Interface para obtener el buffer size - permite testing sin Robolectric
+ */
+interface AudioBufferProvider {
+    fun getMinBufferSize(sampleRate: Int, channelConfig: Int, audioFormat: Int): Int
+}
+
+class AndroidAudioBufferProvider : AudioBufferProvider {
+    override fun getMinBufferSize(sampleRate: Int, channelConfig: Int, audioFormat: Int): Int {
+        return AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    }
+}
+
+class AudioDataSource(
+    private val context: Context,
+    private val bufferProvider: AudioBufferProvider = AndroidAudioBufferProvider()
+) {
 
     private companion object {
         const val TAG = "AudioDataSource"
@@ -43,7 +59,9 @@ class AudioDataSource(private val context: Context) {
     @Volatile private var isPaused = false
     @Volatile private var lastSoundTime = 0L
 
-    private val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+    private val bufferSize by lazy { 
+        bufferProvider.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+    }
 
     data class AudioLevelData(val rmsDb: Float)
     data class RecordedAudioData(val file: File)
@@ -260,12 +278,10 @@ class AudioDataSource(private val context: Context) {
 
     fun pauseRecording() {
         isPaused = true
-        Log.d(TAG, "Audio recording paused.")
     }
 
     fun resumeRecording() {
         isPaused = false
-        Log.d(TAG, "Audio recording resumed.")
     }
 
     fun stopMonitoring() {
@@ -275,9 +291,8 @@ class AudioDataSource(private val context: Context) {
         try {
             recordingThread?.join(THREAD_JOIN_TIMEOUT)
             cleanupAudioRecord()
-            Log.d(TAG, "Stopped audio monitoring.")
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping AudioRecord.", e)
+            // Error stopping AudioRecord
         }
     }
 

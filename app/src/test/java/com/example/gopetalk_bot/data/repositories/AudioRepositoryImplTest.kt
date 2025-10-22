@@ -150,4 +150,81 @@ class AudioRepositoryImplTest {
         verify(exactly = 2) { audioDataSource.resumeRecording() }
     }
 
+    @Test
+    fun `release after stopMonitoring should work`() {
+        repository.stopMonitoring()
+        repository.release()
+
+        verify { audioDataSource.stopMonitoring() }
+        verify { audioDataSource.release() }
+    }
+
+    @Test
+    fun `pauseRecording before startMonitoring should work`() {
+        repository.pauseRecording()
+        repository.startMonitoring()
+
+        verify { audioDataSource.pauseRecording() }
+        verify { audioDataSource.startMonitoring(any(), any(), any()) }
+    }
+
+    @Test
+    fun `resumeRecording before startMonitoring should work`() {
+        repository.resumeRecording()
+        repository.startMonitoring()
+
+        verify { audioDataSource.resumeRecording() }
+        verify { audioDataSource.startMonitoring(any(), any(), any()) }
+    }
+
+    @Test
+    fun `complete recording lifecycle should work`() {
+        repository.startMonitoring()
+        repository.pauseRecording()
+        repository.resumeRecording()
+        repository.stopMonitoring()
+        repository.release()
+
+        verifyOrder {
+            audioDataSource.startMonitoring(any(), any(), any())
+            audioDataSource.pauseRecording()
+            audioDataSource.resumeRecording()
+            audioDataSource.stopMonitoring()
+            audioDataSource.release()
+        }
+    }
+
+    @Test
+    fun `multiple pause resume cycles should work`() {
+        repository.pauseRecording()
+        repository.resumeRecording()
+        repository.pauseRecording()
+        repository.resumeRecording()
+
+        verify(exactly = 2) { audioDataSource.pauseRecording() }
+        verify(exactly = 2) { audioDataSource.resumeRecording() }
+    }
+
+    @Test
+    fun `startMonitoring after release should work`() {
+        repository.release()
+        repository.startMonitoring()
+
+        verify { audioDataSource.release() }
+        verify { audioDataSource.startMonitoring(any(), any(), any()) }
+    }
+
+    @Test
+    fun `stopMonitoring without startMonitoring should work`() {
+        repository.stopMonitoring()
+
+        verify { audioDataSource.stopMonitoring() }
+    }
+
+    @Test
+    fun `release without startMonitoring should work`() {
+        repository.release()
+
+        verify { audioDataSource.release() }
+    }
 }

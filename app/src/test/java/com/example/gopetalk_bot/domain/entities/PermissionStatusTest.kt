@@ -105,4 +105,56 @@ class PermissionStatusTest {
         assertThat(string).contains("RECORD_AUDIO")
         assertThat(string).contains("true")
     }
+
+    @Test
+    fun `PermissionStatus hashCode should be consistent`() {
+        val permissions = listOf("android.permission.RECORD_AUDIO")
+        val status1 = PermissionStatus(permissions, true)
+        val status2 = PermissionStatus(permissions, true)
+
+        assertThat(status1.hashCode()).isEqualTo(status2.hashCode())
+    }
+
+    @Test
+    fun `PermissionStatus copy with different permissions should work`() {
+        val permissions1 = listOf("android.permission.RECORD_AUDIO")
+        val permissions2 = listOf("android.permission.INTERNET")
+        val original = PermissionStatus(permissions1, true)
+        val copied = original.copy(permissions = permissions2)
+
+        assertThat(original.permissions).isEqualTo(permissions1)
+        assertThat(copied.permissions).isEqualTo(permissions2)
+    }
+
+    @Test
+    fun `PermissionStatus with single permission should work`() {
+        val status = PermissionStatus(listOf("android.permission.RECORD_AUDIO"), true)
+
+        assertThat(status.permissions).hasSize(1)
+    }
+
+    @Test
+    fun `PermissionStatus with large permission list should work`() {
+        val permissions = (1..50).map { "android.permission.PERMISSION_$it" }
+        val status = PermissionStatus(permissions, false)
+
+        assertThat(status.permissions).hasSize(50)
+        assertThat(status.allGranted).isFalse()
+    }
+
+    @Test
+    fun `PermissionStatus copy without changes should be equal`() {
+        val original = PermissionStatus(listOf("android.permission.RECORD_AUDIO"), true)
+        val copied = original.copy()
+
+        assertThat(original).isEqualTo(copied)
+    }
+
+    @Test
+    fun `PermissionStatus with empty list and false should work`() {
+        val status = PermissionStatus(emptyList(), false)
+
+        assertThat(status.permissions).isEmpty()
+        assertThat(status.allGranted).isFalse()
+    }
 }
