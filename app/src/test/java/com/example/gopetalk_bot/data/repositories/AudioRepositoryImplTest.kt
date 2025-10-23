@@ -2,10 +2,14 @@ package com.example.gopetalk_bot.data.repositories
 
 import com.example.gopetalk_bot.data.datasources.local.AudioDataSource
 import com.example.gopetalk_bot.domain.entities.AudioData
+import com.example.gopetalk_bot.domain.entities.AudioFormat
 import com.example.gopetalk_bot.domain.entities.AudioLevel
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -23,6 +27,34 @@ class AudioRepositoryImplTest {
     fun setup() {
         audioDataSource = mockk(relaxed = true)
         repository = AudioRepositoryImpl(audioDataSource)
+        every { audioDataSource.startMonitoring(any(), any(), any()) } just Runs
+    }
+
+    @Test
+    fun `getAudioLevelStream should propagate data source errors`() = runTest {
+        val audioLevelSlot = slot<(AudioDataSource.AudioLevelData) -> Unit>()
+        val errorSlot = slot<(String, Throwable?) -> Unit>()
+        every { audioDataSource.startMonitoring(capture(audioLevelSlot), any(), capture(errorSlot)) } answers { }
+
+        var failure: Throwable? = null
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            try {
+                repository.getAudioLevelStream().first()
+            } catch (t: Throwable) {
+                failure = t
+            }
+        }
+
+        repository.startMonitoring()
+        pumpScheduler()
+
+        val cause = IllegalStateException("boom")
+        errorSlot.captured.invoke("failure", cause)
+
+        pumpScheduler()
+        collectJob.join()
+
+        assertThat(failure).isNotNull()
     }
 
     @After
@@ -65,29 +97,46 @@ class AudioRepositoryImplTest {
         verify { audioDataSource.release() }
     }
 
-   /* @Test
-    fun `getRecordedAudioStream should emit recorded audio from data source`() = runTest {
-        var capturedCallback: ((AudioDataSource.RecordedAudioData) -> Unit)? = null
-        val mockFile = mockk<File>(relaxed = true)
+    @Test
+    fun `getAudioLevelStream should emit RMS values`() = runTest {
+        val audioLevelSlot = slot<(AudioDataSource.AudioLevelData) -> Unit>()
+        every { audioDataSource.startMonitoring(capture(audioLevelSlot), any(), any()) } answers { }
 
-        every { audioDataSource.startMonitoring(any(), any(), any()) } answers {
-            capturedCallback = secondArg()
+        var emittedLevel: AudioLevel? = null
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            emittedLevel = repository.getAudioLevelStream().first()
         }
-
         repository.startMonitoring()
-        val flow = repository.getRecordedAudioStream()
 
-        // Simulate recording stopped callback
-        val testRecordedData = AudioDataSource.RecordedAudioData(file = mockFile)
-        capturedCallback?.invoke(testRecordedData)
+        val rmsValue = 42.5f
+        audioLevelSlot.captured.invoke(AudioDataSource.AudioLevelData(rmsDb = rmsValue))
 
-        val result = flow.first()
-        assertThat(result.file).isEqualTo(mockFile)
-        assertThat(result.sampleRate).isEqualTo(16000)
+        collectJob.join()
+        assertThat(emittedLevel).isNotNull()
+        assertThat(emittedLevel?.rmsDb).isEqualTo(rmsValue)
     }
 
+    @Test
+    fun `getRecordedAudioStream should emit audio data`() = runTest {
+        val recordedSlot = slot<(AudioDataSource.RecordedAudioData) -> Unit>()
+        every { audioDataSource.startMonitoring(any(), capture(recordedSlot), any()) } answers { }
+        val mockFile = mockk<File>(relaxed = true)
 
-    */
+        var audioData: AudioData? = null
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            audioData = repository.getRecordedAudioStream().first()
+        }
+        repository.startMonitoring()
+
+        recordedSlot.captured.invoke(AudioDataSource.RecordedAudioData(file = mockFile))
+
+        collectJob.join()
+        assertThat(audioData).isNotNull()
+        assertThat(audioData?.file).isEqualTo(mockFile)
+        assertThat(audioData?.sampleRate).isEqualTo(16000)
+        assertThat(audioData?.channels).isEqualTo(1)
+        assertThat(audioData?.format).isEqualTo(AudioFormat.PCM_16BIT)
+    }
 
     @Test
     fun `multiple startMonitoring calls should work correctly`() {
@@ -227,4 +276,8 @@ class AudioRepositoryImplTest {
 
         verify { audioDataSource.release() }
     }
+}
+
+private fun TestScope.pumpScheduler() {
+    testScheduler.runCurrent()
 }

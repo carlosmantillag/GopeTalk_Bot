@@ -33,7 +33,12 @@ class VoiceInteractionPresenter(
     private val updateWebSocketChannelUseCase: UpdateWebSocketChannelUseCase,
     private val pollAudioUseCase: PollAudioUseCase,
     private val userPreferences: UserPreferences,
-    private val mainThreadHandler: Handler = Handler(Looper.getMainLooper())
+    private val mainThreadHandler: Handler = Handler(Looper.getMainLooper()),
+    private val waitingMessageDelayMs: Long = WAITING_MESSAGE_DELAY_MS,
+    private val waitingMessageText: String = WAITING_MESSAGE,
+    private val waitingMessageMaxRepeats: Int = Int.MAX_VALUE,
+    private val isAudioPollingEnabled: Boolean = true,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : VoiceInteractionContract.Presenter {
 
     private companion object {
@@ -61,7 +66,9 @@ class VoiceInteractionPresenter(
         connectToWebSocket()
         setupTtsListeners()
         startAudioMonitoring()
-        startAudioPolling()
+        if (isAudioPollingEnabled) {
+            startAudioPolling()
+        }
     }
 
     private fun setupTtsListeners() {
@@ -155,10 +162,13 @@ class VoiceInteractionPresenter(
     private fun scheduleWaitingMessage() {
         waitingMessageJob?.cancel()
         waitingMessageJob = presenterScope.launch {
-            delay(WAITING_MESSAGE_DELAY_MS)
-            while (isActive) {
-                speak(WAITING_MESSAGE)
-                delay(WAITING_MESSAGE_DELAY_MS)
+            delay(waitingMessageDelayMs)
+            var remainingMessages = waitingMessageMaxRepeats
+            while (isActive && remainingMessages > 0) {
+                speak(waitingMessageText)
+                remainingMessages--
+                if (!isActive || remainingMessages == 0) break
+                delay(waitingMessageDelayMs)
             }
         }
     }
@@ -280,7 +290,7 @@ class VoiceInteractionPresenter(
     private fun startAudioPolling() {
         view.logInfo("Starting audio polling")
         
-        pollingJob = presenterScope.launch(Dispatchers.IO) {
+        pollingJob = presenterScope.launch(ioDispatcher) {
             while (isActive) {
                 try {
                     pollAudioUseCase.execute(

@@ -25,6 +25,11 @@ import java.io.File
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceInteractionPresenterTest {
 
+    private companion object {
+        const val WAITING_MESSAGE = "Trayendo tu respuesta, espera"
+        const val TEST_WAITING_DELAY_MS = 10L
+    }
+
     private lateinit var presenter: VoiceInteractionPresenter
     private lateinit var view: VoiceInteractionContract.View
     private lateinit var startAudioMonitoringUseCase: StartAudioMonitoringUseCase
@@ -107,7 +112,11 @@ class VoiceInteractionPresenterTest {
 
         every { userPreferences.authToken } returns "test-token"
 
-        presenter = VoiceInteractionPresenter(
+        presenter = buildPresenter()
+    }
+
+    private fun buildPresenter(pollingEnabled: Boolean = false): VoiceInteractionPresenter {
+        return VoiceInteractionPresenter(
             view = view,
             startAudioMonitoringUseCase = startAudioMonitoringUseCase,
             stopAudioMonitoringUseCase = stopAudioMonitoringUseCase,
@@ -125,12 +134,159 @@ class VoiceInteractionPresenterTest {
             updateWebSocketChannelUseCase = updateWebSocketChannelUseCase,
             pollAudioUseCase = pollAudioUseCase,
             userPreferences = userPreferences,
-            mainThreadHandler = mockHandler
+            mainThreadHandler = mockHandler,
+            waitingMessageDelayMs = TEST_WAITING_DELAY_MS,
+            waitingMessageText = WAITING_MESSAGE,
+            waitingMessageMaxRepeats = 1,
+            isAudioPollingEnabled = pollingEnabled,
+            ioDispatcher = if (pollingEnabled) testDispatcher else UnconfinedTestDispatcher(testDispatcher.scheduler)
         )
+    }
+
+    private fun pumpTasks() {
+        testDispatcher.scheduler.runCurrent()
+    }
+
+    @Test
+    fun `waiting message should be spoken when backend delays response`() = runTest {
+        presenter = buildPresenter()
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        every { sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda()) } answers { }
+
+        presenter.start()
+        pumpTasks()
+
+        testDispatcher.scheduler.advanceTimeBy(TEST_WAITING_DELAY_MS)
+        pumpTasks()
+
+        presenter.stop()
+        pumpTasks()
+
+        verify { speakTextUseCase.execute(WAITING_MESSAGE, any()) }
+    }
+
+    @Test
+    fun `waiting message should be cancelled when backend responds promptly`() = runTest {
+        presenter = buildPresenter()
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        every {
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, "Listo")
+            )
+        }
+
+        presenter.start()
+        pumpTasks()
+
+        testDispatcher.scheduler.advanceTimeBy(TEST_WAITING_DELAY_MS)
+        pumpTasks()
+
+        presenter.stop()
+        pumpTasks()
+
+        verify(exactly = 0) { speakTextUseCase.execute(WAITING_MESSAGE, any()) }
+    }
+
+
+    @Test
+    fun `playback onPlaybackStarted should log info`() = runTest {
+        presenter = buildPresenter(pollingEnabled = true)
+        val audioSlot = slot<(File, String, String) -> Unit>()
+        val playbackSlot = slot<AudioPlayerRepository.PlaybackListener>()
+        every { pollAudioUseCase.execute(capture(audioSlot), any(), any()) } answers { }
+        every { playAudioFileUseCase.execute(any(), capture(playbackSlot)) } answers { }
+
+        presenter.start()
+        pumpTasks()
+
+        val audioFile = mockk<File>(relaxed = true)
+        audioSlot.captured.invoke(audioFile, "user1", "channel")
+        pumpTasks()
+
+        playbackSlot.captured.onPlaybackStarted()
+        verify { view.logInfo("Audio playback started") }
+
+        presenter.stop()
+        pumpTasks()
+    }
+
+    @Test
+    fun `audio polling should play received files`() = runTest {
+        presenter = buildPresenter(pollingEnabled = true)
+        val audioFile = mockk<File>(relaxed = true)
+        val audioSlot = slot<(File, String, String) -> Unit>()
+        val errorSlot = slot<(String) -> Unit>()
+
+        every { pollAudioUseCase.execute(capture(audioSlot), any(), capture(errorSlot)) } answers { }
+
+        presenter.start()
+        pumpTasks()
+
+        audioSlot.captured.invoke(audioFile, "user1", "general")
+        pumpTasks()
+
+        verify { view.logInfo("Audio received from user user1 in channel general") }
+        verify { playAudioFileUseCase.execute(audioFile, any()) }
+
+        presenter.stop()
+        pumpTasks()
+    }
+
+    @Test
+    fun `audio polling should log errors`() = runTest {
+        presenter = buildPresenter(pollingEnabled = true)
+        val audioSlot = slot<(File, String, String) -> Unit>()
+        val errorSlot = slot<(String) -> Unit>()
+
+        every { pollAudioUseCase.execute(capture(audioSlot), any(), capture(errorSlot)) } answers { }
+
+        presenter.start()
+        pumpTasks()
+
+        errorSlot.captured.invoke("network issue")
+        pumpTasks()
+
+        verify { view.logError("Polling error: network issue", null) }
+
+        presenter.stop()
+        pumpTasks()
+    }
+
+    @Test
+    fun `audio polling should handle exceptions`() = runTest {
+        presenter = buildPresenter(pollingEnabled = true)
+        every { pollAudioUseCase.execute(any(), any(), any()) } throws RuntimeException("boom")
+
+        presenter.start()
+        pumpTasks()
+
+        verify { view.logError("Polling exception: boom", any()) }
+
+        presenter.stop()
+        pumpTasks()
     }
 
     @After
     fun tearDown() {
+        runCatching { presenter.stop() }
         Dispatchers.resetMain()
         unmockkAll()
     }
@@ -138,7 +294,7 @@ class VoiceInteractionPresenterTest {
     @Test
     fun `start should initialize all services`() = runTest {
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { view.logInfo("Presenter started.") }
         verify { connectWebSocketUseCase.execute(any(), "test-token", null, any()) }
@@ -252,7 +408,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { speakTextUseCase.execute("Hola mundo", any()) }
     }
@@ -279,7 +435,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { speakTextUseCase.execute("Respuesta del servidor", any()) }
     }
@@ -305,7 +461,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify(exactly = 0) { speakTextUseCase.execute(any(), any()) }
     }
@@ -331,7 +487,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { view.logError("API Error: Server error", null) }
     }
@@ -358,11 +514,10 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { playAudioFileUseCase.execute(mockResponseFile, any()) }
     }
-
     @Test
     fun `handleBackendResponse with list_channels action should speak channel list`() = runTest {
         val mockFile = mockk<File>(relaxed = true)
@@ -385,7 +540,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { speakTextUseCase.execute(match { it.contains("general") && it.contains("tech") && it.contains("music") }, any()) }
     }
@@ -412,7 +567,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { speakTextUseCase.execute(match { it.contains("Alice") && it.contains("Bob") && it.contains("Charlie") }, any()) }
     }
@@ -439,7 +594,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { view.logInfo("Logout requested") }
         verify { view.logout() }
@@ -468,7 +623,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { view.logInfo("Channel updated to: tech") }
         verify { updateWebSocketChannelUseCase.execute("test-token", "tech") }
@@ -495,7 +650,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         verify { view.logError(match { it.contains("Failed to parse") }, any()) }
         verify { speakTextUseCase.execute("No entendí la respuesta del servidor.", any()) }
@@ -524,7 +679,7 @@ class VoiceInteractionPresenterTest {
     @Test
     fun `stop should cleanup all resources`() = runTest {
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
         
         presenter.stop()
 
@@ -547,7 +702,7 @@ class VoiceInteractionPresenterTest {
         every { monitorAudioLevelUseCase.execute() } returns flowOf(audioLevel)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         assertThat(AudioRmsMonitor.rmsDbFlow.value).isEqualTo(45.5f)
     }
@@ -581,7 +736,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
         
         playbackListener?.onPlaybackCompleted()
 
@@ -617,7 +772,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
         
         playbackListener?.onPlaybackError("Playback failed")
 
@@ -647,7 +802,7 @@ class VoiceInteractionPresenterTest {
         every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
         
         presenter.start()
-        advanceUntilIdle()
+        pumpTasks()
 
         // El comportamiento puede variar - verificar que no se llame con texto vacío
         verify(exactly = 0) { speakTextUseCase.execute("", any()) }

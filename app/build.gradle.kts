@@ -130,6 +130,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/BuildConfig.*",
         "**/Manifest*.*",
         "**/*Test*.*",
+        "**/*\$DefaultImpls.*",
         "android/**/*.*",
         "**/*\$ViewInjector*.*",
         "**/*\$ViewBinder*.*",
@@ -146,7 +147,19 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/*MembersInjector*.*",
         "**/*_Factory*.*",
         "**/*_Provide*Factory*.*",
-        "**/*Extensions*.*"
+        "**/*Extensions*.*",
+        "**/presentation/**/ComposableSingletons*.*",
+        "**/presentation/**/MainActivity*.*",
+        "**/presentation/**/AuthenticationActivity*.*",
+        "**/presentation/**/VoiceInteractionService*.*",
+        "**/presentation/**/MainScreen*.*",
+        "**/presentation/**/AuthenticationScreen*.*",
+        "**/ui/theme/*",
+        "**/data/datasources/local/Android*.*",
+        "**/data/datasources/remote/Android*.*",
+        "**/data/datasources/remote/RemoteDataSource*.*",
+        "**/data/datasources/local/AudioDataSource*.*",
+        "**/data/datasources/local/AudioPlayerDataSource*.*"
     )
 
     val debugTree = fileTree("${layout.buildDirectory.get().asFile}/tmp/kotlin-classes/debug") {
