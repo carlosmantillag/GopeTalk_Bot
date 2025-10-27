@@ -40,7 +40,7 @@ class AudioDataSource(
         const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
         const val SILENCE_THRESHOLD_DB = 70f
-        const val SILENCE_TIMEOUT_MS = 2000L
+        const val SILENCE_TIMEOUT_MS = 3000L
         const val WAV_HEADER_SIZE = 44
         const val AUDIO_FILENAME = "command.wav"
         const val THREAD_JOIN_TIMEOUT = 500L

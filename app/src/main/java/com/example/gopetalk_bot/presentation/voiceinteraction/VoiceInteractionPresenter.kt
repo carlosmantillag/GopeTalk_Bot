@@ -44,7 +44,7 @@ class VoiceInteractionPresenter(
     private companion object {
         const val WEBSOCKET_URL = "ws://159.223.150.185/ws"
         const val POLLING_INTERVAL_MS = 2000L
-        const val WAITING_MESSAGE_DELAY_MS = 3000L
+        const val WAITING_MESSAGE_DELAY_MS = 6000L
         const val WAITING_MESSAGE = "Trayendo tu respuesta, espera"
         const val STATUS_CODE_NO_CONTENT = 204
     }
