@@ -41,12 +41,23 @@ class VoiceInteractionPresenter(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : VoiceInteractionContract.Presenter {
 
-    private companion object {
+    companion object {
         const val WEBSOCKET_URL = "ws://159.223.150.185/ws"
         const val POLLING_INTERVAL_MS = 2000L
-        const val WAITING_MESSAGE_DELAY_MS = 5000L
+        const val WAITING_MESSAGE_DELAY_MS = 4000L
         const val WAITING_MESSAGE = "Trayendo tu respuesta, espera"
         const val STATUS_CODE_NO_CONTENT = 204
+        const val SERVER_OUTAGE_TTS_MESSAGE = " ups... Algo salió mal. Pronto solucionaremos el problema y podrás continuar con nosotros"
+        private val SERVER_DOWN_KEYWORDS = listOf(
+            "failed to connect",
+            "connection refused",
+            "503",
+            "502",
+            "504",
+            "service unavailable",
+            "host unreachable",
+            "unable to resolve host",
+        )
     }
 
     private val presenterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -60,6 +71,8 @@ class VoiceInteractionPresenter(
     
     private var pollingJob: Job? = null
     private var waitingMessageJob: Job? = null
+    @Volatile
+    private var serverOutageNotified = false
 
     override fun start() {
         view.logInfo("Presenter started.")
@@ -115,11 +128,15 @@ class VoiceInteractionPresenter(
     private fun handleApiResponse(response: ApiResponse) {
         when (response) {
             is ApiResponse.Success -> handleSuccessResponse(response)
-            is ApiResponse.Error -> view.logError("API Error: ${response.message}", response.exception)
+            is ApiResponse.Error -> {
+                view.logError("API Error: ${response.message}", response.exception)
+                handleServerOutageIfNeeded(response.message)
+            }
         }
     }
 
     private fun handleSuccessResponse(response: ApiResponse.Success) {
+        serverOutageNotified = false
         response.audioFile?.let {
             playReceivedAudioFile(it)
             return
@@ -300,14 +317,16 @@ class VoiceInteractionPresenter(
                     pollAudioUseCase.execute(
                         onAudioReceived = { audioFile, fromUserId, channel ->
                             mainThreadHandler.post {
+                                serverOutageNotified = false
                                 view.logInfo("Audio received from user $fromUserId in channel $channel")
                                 playReceivedAudioFile(audioFile)
                             }
                         },
-                        onNoAudio = {},
+                        onNoAudio = { serverOutageNotified = false },
                         onError = { error ->
                             mainThreadHandler.post {
                                 view.logError("Polling error: $error", null)
+                                handleServerOutageIfNeeded(error)
                             }
                         }
                     )
@@ -326,5 +345,18 @@ class VoiceInteractionPresenter(
         view.logInfo("Stopping audio polling")
         pollingJob?.cancel()
         pollingJob = null
+    }
+
+    private fun handleServerOutageIfNeeded(message: String?): Boolean {
+        if (message.isNullOrBlank()) return false
+        if (serverOutageNotified) return false
+        val lowerMessage = message.lowercase()
+        val isServerDown = SERVER_DOWN_KEYWORDS.any { lowerMessage.contains(it) }
+        if (isServerDown) {
+            serverOutageNotified = true
+            speak(SERVER_OUTAGE_TTS_MESSAGE)
+            return true
+        }
+        return false
     }
 }

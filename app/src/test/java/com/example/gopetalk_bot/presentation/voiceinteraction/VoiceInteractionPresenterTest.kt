@@ -21,6 +21,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceInteractionPresenterTest {
@@ -265,6 +266,39 @@ class VoiceInteractionPresenterTest {
         pumpTasks()
 
         verify { view.logError("Polling error: network issue", null) }
+        verify(exactly = 0) {
+            speakTextUseCase.execute(
+                VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE,
+                any()
+            )
+        }
+
+        presenter.stop()
+        pumpTasks()
+    }
+
+    @Test
+    fun `audio polling unexpected end of stream should speak outage message`() = runTest {
+        presenter = buildPresenter(pollingEnabled = true)
+        val audioSlot = slot<(File, String, String) -> Unit>()
+        val errorSlot = slot<(String) -> Unit>()
+
+        every { pollAudioUseCase.execute(capture(audioSlot), any(), capture(errorSlot)) } answers { }
+
+        presenter.start()
+        pumpTasks()
+
+        val errorMessage = "Failed to poll audio: unexpected end of stream on http://159.223.150.185/"
+        errorSlot.captured.invoke(errorMessage)
+        pumpTasks()
+
+        verify { view.logError("Polling error: $errorMessage", null) }
+        verify {
+            speakTextUseCase.execute(
+                VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE,
+                any()
+            )
+        }
 
         presenter.stop()
         pumpTasks()
@@ -497,6 +531,34 @@ class VoiceInteractionPresenterTest {
         pumpTasks()
 
         verify { view.logError("API Error: Server error", null) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE, any()) }
+    }
+
+    @Test
+    fun `sendAudioToBackend server outage error should speak outage message`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(
+            file = mockFile,
+            sampleRate = 44100,
+            channels = 1,
+            format = AudioFormat.PCM_16BIT
+        )
+
+        every {
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Error("Failed to send audio: connection refused", null, IOException("connection refused"))
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+
+        presenter.start()
+        pumpTasks()
+
+        verify { view.logError("API Error: Failed to send audio: connection refused", any()) }
+        verify { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE, any()) }
     }
 
     @Test
