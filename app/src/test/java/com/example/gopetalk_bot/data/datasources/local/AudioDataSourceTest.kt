@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import com.google.common.truth.Truth.assertThat
 import io.mockk.*
 import org.junit.After
@@ -15,6 +16,7 @@ import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.file.Files
 import kotlin.math.log10
 import kotlin.math.sqrt
 
@@ -23,29 +25,58 @@ class AudioDataSourceTest {
     private lateinit var dataSource: AudioDataSource
     private lateinit var mockContext: Context
     private lateinit var mockBufferProvider: AudioBufferProvider
+    private lateinit var mockAdaptiveThresholdManager: AdaptiveNoiseThresholdManager
+    private lateinit var mockVoiceActivityDetector: VoiceActivityDetector
+    private lateinit var tempCacheDir: File
 
     @Before
     fun setup() {
         // Limpiar mocks anteriores
         clearAllMocks()
+        mockkStatic(Log::class)
+        every { Log.d(any<String>(), any<String>()) } returns 0
+        every { Log.v(any<String>(), any<String>()) } returns 0
+        every { Log.i(any<String>(), any<String>()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
+        every { Log.w(any<String>(), any<Throwable>()) } returns 0
+        every { Log.e(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
         
         mockContext = mockk(relaxed = true)
         mockBufferProvider = mockk(relaxed = true)
+        mockAdaptiveThresholdManager = mockk(relaxed = true)
+        mockVoiceActivityDetector = mockk(relaxed = true)
         
         // Mock cache directory
-        val mockCacheDir = mockk<File>(relaxed = true)
-        every { mockContext.cacheDir } returns mockCacheDir
-        every { mockCacheDir.absolutePath } returns "/tmp/cache"
+        tempCacheDir = Files.createTempDirectory("audio_cache_test").toFile()
+        every { mockContext.cacheDir } returns tempCacheDir
         
         // Mock buffer size
         every { mockBufferProvider.getMinBufferSize(any(), any(), any()) } returns 4096
         
-        dataSource = AudioDataSource(mockContext, mockBufferProvider)
+        every { mockAdaptiveThresholdManager.processAudioLevel(any(), any()) } just Runs
+        every { mockAdaptiveThresholdManager.getCurrentThreshold() } returns 70f
+        every { mockAdaptiveThresholdManager.getAmbientNoiseLevel() } returns 60f
+        every { mockAdaptiveThresholdManager.getEnvironmentType() } returns "Normal"
+        every { mockAdaptiveThresholdManager.isCalibrated() } returns true
+        every { mockAdaptiveThresholdManager.getStatusInfo() } returns "OK"
+        every { mockVoiceActivityDetector.isVoiceDetected(any(), any(), any()) } returns false
+        every { mockVoiceActivityDetector.reset() } just Runs
+        
+        dataSource = AudioDataSource(
+            context = mockContext,
+            bufferProvider = mockBufferProvider,
+            adaptiveThresholdManager = mockAdaptiveThresholdManager,
+            voiceActivityDetector = mockVoiceActivityDetector
+        )
     }
 
     @After
     fun tearDown() {
         unmockkAll()
+        if (::tempCacheDir.isInitialized) {
+            tempCacheDir.deleteRecursively()
+        }
     }
 
     @Test
@@ -1089,6 +1120,8 @@ class AudioDataSourceTest {
     
     @Test
     fun `processAudioData should update lastSoundTime when sound detected`() {
+        every { mockVoiceActivityDetector.isVoiceDetected(any(), any(), any()) } returns true
+        
         val method = AudioDataSource::class.java.getDeclaredMethod(
             "processAudioData",
             ByteArray::class.java,
