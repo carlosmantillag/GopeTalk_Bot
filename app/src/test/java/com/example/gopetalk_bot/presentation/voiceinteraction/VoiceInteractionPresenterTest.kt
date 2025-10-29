@@ -266,12 +266,10 @@ class VoiceInteractionPresenterTest {
         pumpTasks()
 
         verify { view.logError("Polling error: network issue", null) }
-        verify(exactly = 0) {
-            speakTextUseCase.execute(
-                VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE,
-                any()
-            )
-        }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_STREAM_MESSAGE, any()) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_NETWORK_MESSAGE, any()) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_UNAVAILABLE_MESSAGE, any()) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_TIMEOUT_MESSAGE, any()) }
 
         presenter.stop()
         pumpTasks()
@@ -295,7 +293,7 @@ class VoiceInteractionPresenterTest {
         verify { view.logError("Polling error: $errorMessage", null) }
         verify {
             speakTextUseCase.execute(
-                VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE,
+                VoiceInteractionPresenter.SERVER_OUTAGE_STREAM_MESSAGE,
                 any()
             )
         }
@@ -531,7 +529,10 @@ class VoiceInteractionPresenterTest {
         pumpTasks()
 
         verify { view.logError("API Error: Server error", null) }
-        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE, any()) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_STREAM_MESSAGE, any()) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_NETWORK_MESSAGE, any()) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_UNAVAILABLE_MESSAGE, any()) }
+        verify(exactly = 0) { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_TIMEOUT_MESSAGE, any()) }
     }
 
     @Test
@@ -558,7 +559,7 @@ class VoiceInteractionPresenterTest {
         pumpTasks()
 
         verify { view.logError("API Error: Failed to send audio: connection refused", any()) }
-        verify { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_TTS_MESSAGE, any()) }
+        verify { speakTextUseCase.execute(VoiceInteractionPresenter.SERVER_OUTAGE_NETWORK_MESSAGE, any()) }
     }
 
     @Test

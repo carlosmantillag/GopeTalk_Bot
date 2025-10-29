@@ -47,16 +47,23 @@ class VoiceInteractionPresenter(
         const val WAITING_MESSAGE_DELAY_MS = 4000L
         const val WAITING_MESSAGE = "Trayendo tu respuesta, espera"
         const val STATUS_CODE_NO_CONTENT = 204
-        const val SERVER_OUTAGE_TTS_MESSAGE = " ups... Algo salió mal. Pronto solucionaremos el problema y podrás continuar con nosotros"
-        private val SERVER_DOWN_KEYWORDS = listOf(
-            "failed to connect",
-            "connection refused",
-            "503",
-            "502",
-            "504",
-            "service unavailable",
-            "host unreachable",
-            "unable to resolve host",
+        const val SERVER_OUTAGE_STREAM_MESSAGE = "Estamos reiniciando el servicio de audio, vuelve a intentarlo en unos momentos."
+        const val SERVER_OUTAGE_NETWORK_MESSAGE = "No pudimos conectar con el servidor, revisa tu conexión o inténtalo nuevamente más tarde."
+        const val SERVER_OUTAGE_UNAVAILABLE_MESSAGE = "El servidor está en mantenimiento, vuelve a intentarlo pronto."
+        const val SERVER_OUTAGE_TIMEOUT_MESSAGE = "La conexión está tardando demasiado, intentemos de nuevo en un momento."
+        private val SERVER_DOWN_PATTERNS = listOf(
+            "unexpected end of stream" to SERVER_OUTAGE_STREAM_MESSAGE,
+            "connection refused" to SERVER_OUTAGE_NETWORK_MESSAGE,
+            "failed to connect" to SERVER_OUTAGE_NETWORK_MESSAGE,
+            "host unreachable" to SERVER_OUTAGE_NETWORK_MESSAGE,
+            "unable to resolve host" to SERVER_OUTAGE_NETWORK_MESSAGE,
+            "503" to SERVER_OUTAGE_UNAVAILABLE_MESSAGE,
+            "502" to SERVER_OUTAGE_UNAVAILABLE_MESSAGE,
+            "504" to SERVER_OUTAGE_UNAVAILABLE_MESSAGE,
+            "service unavailable" to SERVER_OUTAGE_UNAVAILABLE_MESSAGE,
+            "gateway timeout" to SERVER_OUTAGE_TIMEOUT_MESSAGE,
+            "timed out" to SERVER_OUTAGE_TIMEOUT_MESSAGE,
+            "timeout" to SERVER_OUTAGE_TIMEOUT_MESSAGE
         )
     }
 
@@ -72,7 +79,7 @@ class VoiceInteractionPresenter(
     private var pollingJob: Job? = null
     private var waitingMessageJob: Job? = null
     @Volatile
-    private var serverOutageNotified = false
+    private var lastServerOutageMessage: String? = null
 
     override fun start() {
         view.logInfo("Presenter started.")
@@ -136,7 +143,7 @@ class VoiceInteractionPresenter(
     }
 
     private fun handleSuccessResponse(response: ApiResponse.Success) {
-        serverOutageNotified = false
+        lastServerOutageMessage = null
         response.audioFile?.let {
             playReceivedAudioFile(it)
             return
@@ -317,12 +324,12 @@ class VoiceInteractionPresenter(
                     pollAudioUseCase.execute(
                         onAudioReceived = { audioFile, fromUserId, channel ->
                             mainThreadHandler.post {
-                                serverOutageNotified = false
+                                lastServerOutageMessage = null
                                 view.logInfo("Audio received from user $fromUserId in channel $channel")
                                 playReceivedAudioFile(audioFile)
                             }
                         },
-                        onNoAudio = { serverOutageNotified = false },
+                        onNoAudio = { lastServerOutageMessage = null },
                         onError = { error ->
                             mainThreadHandler.post {
                                 view.logError("Polling error: $error", null)
@@ -349,14 +356,14 @@ class VoiceInteractionPresenter(
 
     private fun handleServerOutageIfNeeded(message: String?): Boolean {
         if (message.isNullOrBlank()) return false
-        if (serverOutageNotified) return false
         val lowerMessage = message.lowercase()
-        val isServerDown = SERVER_DOWN_KEYWORDS.any { lowerMessage.contains(it) }
-        if (isServerDown) {
-            serverOutageNotified = true
-            speak(SERVER_OUTAGE_TTS_MESSAGE)
-            return true
-        }
-        return false
+        val outageMessage = SERVER_DOWN_PATTERNS.firstOrNull { (keyword, _) ->
+            lowerMessage.contains(keyword)
+        }?.second ?: return false
+
+        if (lastServerOutageMessage == outageMessage) return false
+        lastServerOutageMessage = outageMessage
+        speak(outageMessage)
+        return true
     }
 }
