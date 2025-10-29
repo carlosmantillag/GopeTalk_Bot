@@ -18,9 +18,6 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-/**
- * Interface para ejecutar código en el hilo principal - permite testing
- */
 interface MainThreadExecutor {
     fun post(runnable: Runnable)
 }
@@ -32,9 +29,6 @@ class AndroidMainThreadExecutor : MainThreadExecutor {
     }
 }
 
-/**
- * Interface para operaciones con Base64 - permite testing
- */
 interface Base64Decoder {
     fun decode(str: String, flags: Int): ByteArray
 }

@@ -8,9 +8,6 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import java.util.Locale
 
-/**
- * Interface para el reconocedor de voz - permite testing sin Robolectric
- */
 interface SpeechRecognizerWrapper {
     fun setRecognitionListener(listener: RecognitionListener)
     fun startListening(intent: Intent)
@@ -18,9 +15,6 @@ interface SpeechRecognizerWrapper {
     fun destroy()
 }
 
-/**
- * Implementación real del SpeechRecognizerWrapper
- */
 class AndroidSpeechRecognizerWrapper(private val recognizer: SpeechRecognizer) : SpeechRecognizerWrapper {
     override fun setRecognitionListener(listener: RecognitionListener) {
         recognizer.setRecognitionListener(listener)
@@ -39,9 +33,6 @@ class AndroidSpeechRecognizerWrapper(private val recognizer: SpeechRecognizer) :
     }
 }
 
-/**
- * Factory para crear SpeechRecognizerWrapper e Intent
- */
 interface SpeechRecognizerFactory {
     fun isRecognitionAvailable(context: Context): Boolean
     fun createRecognizer(context: Context): SpeechRecognizerWrapper

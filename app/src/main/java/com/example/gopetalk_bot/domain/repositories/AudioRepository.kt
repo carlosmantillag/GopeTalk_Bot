@@ -14,7 +14,6 @@ interface AudioRepository {
     fun getRecordedAudioStream(): Flow<AudioData>
     fun release()
     
-    // Sistema adaptativo de sensibilidad
     fun getAdaptiveStatus(): String
     fun resetAdaptiveSystem()
     fun forceRecalibration()

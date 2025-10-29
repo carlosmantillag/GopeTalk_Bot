@@ -360,10 +360,7 @@ class AudioDataSource(
     fun release() {
         if (isMonitoring) stopMonitoring()
     }
-    
-    /**
-     * Log periódico del estado del sistema adaptativo
-     */
+
     private fun logAdaptiveStatus(currentRmsDb: Float) {
         if (adaptiveThresholdManager.isCalibrated()) {
             val threshold = adaptiveThresholdManager.getCurrentThreshold()
@@ -374,25 +371,16 @@ class AudioDataSource(
                       "Umbral: ${String.format("%.1f", threshold)} dB")
         }
     }
-    
-    /**
-     * Obtiene información del sistema adaptativo
-     */
+
     fun getAdaptiveStatus(): String {
         return adaptiveThresholdManager.getStatusInfo()
     }
-    
-    /**
-     * Reinicia el sistema de calibración adaptativa
-     */
+
     fun resetAdaptiveSystem() {
         adaptiveThresholdManager.reset()
         Log.i(TAG, "Sistema adaptativo reiniciado")
     }
-    
-    /**
-     * Fuerza una recalibración del sistema
-     */
+
     fun forceRecalibration() {
         adaptiveThresholdManager.forceRecalibration()
         Log.i(TAG, "Recalibración forzada")

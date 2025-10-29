@@ -31,7 +31,7 @@ class AuthenticationPresenter(
         const val MSG_WELCOME = "Bienvenido Usuario, ¿cuál es tu nombre?"
         const val MSG_WELCOME_NAME = "Bienvenido"
         const val MSG_ASK_PIN = "Dame un PIN de 4 dígitos por favor para poder entrar, no lo olvides"
-        const val MSG_CONFIRM_PIN = "El PIN es %d, ¿me confirmas?"
+        const val MSG_CONFIRM_PIN = "El PIN es %s, ¿me confirmas?"
         const val MSG_INVALID_PIN = "El PIN debe ser de 4 dígitos numéricos. Por favor, repite el PIN"
         const val MSG_UNCLEAR = "No entendí, por favor di sí o no"
         const val MSG_RETRY = "No pude entender, por favor repite"
@@ -178,8 +178,9 @@ class AuthenticationPresenter(
         
         if (isValidPin(pinString)) {
             userPin = pinString.toInt()
+            val pinWithSpaces = pinString.toCharArray().joinToString(" ")
             authState = AuthState.WAITING_FOR_PIN_CONFIRMATION
-            speak(String.format(MSG_CONFIRM_PIN, userPin), "auth_confirm_pin")
+            speak(String.format(MSG_CONFIRM_PIN, pinWithSpaces), "auth_confirm_pin")
         } else {
             view.logError("Invalid PIN format: $pinString", null)
             speak(MSG_INVALID_PIN, "auth_invalid_pin")
@@ -296,9 +297,24 @@ class AuthenticationPresenter(
             "cero" to "0", "uno" to "1", "dos" to "2", "tres" to "3", "cuatro" to "4",
             "cinco" to "5", "seis" to "6", "siete" to "7", "ocho" to "8", "nueve" to "9"
         )
-        
-        var result = text.lowercase().replace(" ", "")
-        numberMap.forEach { (word, digit) -> result = result.replace(word, digit) }
-        return result.filter { it.isDigit() }
+
+        var remainingText = text.lowercase().replace(" ", "")
+        val resultBuilder = StringBuilder()
+
+        while (remainingText.isNotEmpty()) {
+            val match = numberMap.entries.find { (word, _) -> remainingText.startsWith(word) }
+
+            if (match != null) {
+                resultBuilder.append(match.value)
+                remainingText = remainingText.substring(match.key.length)
+            } else if (remainingText.first().isDigit()) {
+                resultBuilder.append(remainingText.first())
+                remainingText = remainingText.substring(1)
+            } else {
+                remainingText = remainingText.substring(1)
+            }
+        }
+
+        return resultBuilder.toString()
     }
 }

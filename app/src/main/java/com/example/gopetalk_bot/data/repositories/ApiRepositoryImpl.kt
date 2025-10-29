@@ -42,7 +42,6 @@ class ApiRepositoryImpl(
             pin = pin,
             callback = object : RemoteDataSource.AuthCallback {
                 override fun onSuccess(statusCode: Int, message: String, token: String) {
-                    // Return both message and token in the body as JSON-like string
                     val responseBody = "{\"message\":\"$message\",\"token\":\"$token\"}"
                     callback(ApiResponse.Success(statusCode, responseBody, null))
                 }

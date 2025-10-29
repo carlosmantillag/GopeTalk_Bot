@@ -6,17 +6,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
-/**
- * Interface para verificar permisos - permite testing sin Robolectric
- */
 interface PermissionChecker {
     fun checkPermission(context: Context, permission: String): Int
     fun getSdkVersion(): Int
 }
 
-/**
- * Implementación real del PermissionChecker
- */
 class AndroidPermissionChecker : PermissionChecker {
     override fun checkPermission(context: Context, permission: String): Int {
         return ContextCompat.checkSelfPermission(context, permission)

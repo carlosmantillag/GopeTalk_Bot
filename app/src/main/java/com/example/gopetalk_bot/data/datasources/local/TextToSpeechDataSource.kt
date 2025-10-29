@@ -6,9 +6,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
-/**
- * Interface para el motor TTS - permite testing sin Robolectric
- */
 interface TtsEngine {
     fun speak(text: String, queueMode: Int, params: Bundle?, utteranceId: String): Int
     fun stop(): Int
@@ -17,16 +14,13 @@ interface TtsEngine {
     fun setOnUtteranceProgressListener(listener: UtteranceProgressListener?)
 }
 
-/**
- * Implementación real del TtsEngine usando TextToSpeech de Android
- */
 class AndroidTtsEngine(private val tts: TextToSpeech) : TtsEngine {
     override fun speak(text: String, queueMode: Int, params: Bundle?, utteranceId: String): Int {
         return tts.speak(text, queueMode, params, utteranceId)
     }
     
     override fun stop(): Int = tts.stop()
-    
+
     override fun shutdown() = tts.shutdown()
     
     override fun setLanguage(locale: Locale): Int {
@@ -38,9 +32,6 @@ class AndroidTtsEngine(private val tts: TextToSpeech) : TtsEngine {
     }
 }
 
-/**
- * Factory para crear TtsEngine - permite inyectar mocks en tests
- */
 interface TtsEngineFactory {
     fun create(context: Context, onInit: (Int) -> Unit): TtsEngine
 }
