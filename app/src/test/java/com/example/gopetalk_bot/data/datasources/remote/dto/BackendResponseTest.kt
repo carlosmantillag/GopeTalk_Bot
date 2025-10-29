@@ -9,6 +9,10 @@ class BackendResponseTest {
     fun `should create BackendResponse with default values`() {
         val response = BackendResponse()
 
+        assertThat(response.status).isEmpty()
+        assertThat(response.intent).isEmpty()
+        assertThat(response.message).isEmpty()
+        assertThat(response.data).isNull()
         assertThat(response.text).isEmpty()
         assertThat(response.action).isEmpty()
         assertThat(response.channels).isEmpty()
@@ -21,6 +25,10 @@ class BackendResponseTest {
     @Test
     fun `should create BackendResponse with all fields`() {
         val response = BackendResponse(
+            status = "ok",
+            intent = "request_channel_connect",
+            message = "Conectado al canal 1",
+            data = BackendResponseData(channel = "canal-1", channelLabel = "1"),
             text = "Hello",
             action = "list_channels",
             channels = listOf("general", "random"),
@@ -30,6 +38,11 @@ class BackendResponseTest {
             channel = "general"
         )
 
+        assertThat(response.status).isEqualTo("ok")
+        assertThat(response.intent).isEqualTo("request_channel_connect")
+        assertThat(response.message).isEqualTo("Conectado al canal 1")
+        assertThat(response.data?.channel).isEqualTo("canal-1")
+        assertThat(response.data?.channelLabel).isEqualTo("1")
         assertThat(response.text).isEqualTo("Hello")
         assertThat(response.action).isEqualTo("list_channels")
         assertThat(response.channels).containsExactly("general", "random")
@@ -65,6 +78,7 @@ class BackendResponseTest {
     fun `should handle logout action`() {
         val response = BackendResponse(
             action = "logout",
+            message = "",
             text = "Cerrando sesión"
         )
 
@@ -85,19 +99,19 @@ class BackendResponseTest {
 
     @Test
     fun `should support data class copy`() {
-        val original = BackendResponse(text = "Original", action = "test")
-        val copied = original.copy(text = "Modified")
+        val original = BackendResponse(message = "Original", intent = "test_intent")
+        val copied = original.copy(message = "Modified")
 
-        assertThat(copied.text).isEqualTo("Modified")
-        assertThat(copied.action).isEqualTo("test")
-        assertThat(original.text).isEqualTo("Original")
+        assertThat(copied.message).isEqualTo("Modified")
+        assertThat(copied.intent).isEqualTo("test_intent")
+        assertThat(original.message).isEqualTo("Original")
     }
 
     @Test
     fun `should support data class equality`() {
-        val response1 = BackendResponse(text = "Hello", action = "greet")
-        val response2 = BackendResponse(text = "Hello", action = "greet")
-        val response3 = BackendResponse(text = "Goodbye", action = "greet")
+        val response1 = BackendResponse(message = "Hello", intent = "greet")
+        val response2 = BackendResponse(message = "Hello", intent = "greet")
+        val response3 = BackendResponse(message = "Goodbye", intent = "greet")
 
         assertThat(response1).isEqualTo(response2)
         assertThat(response1).isNotEqualTo(response3)
@@ -123,8 +137,9 @@ class BackendResponseTest {
 
     @Test
     fun `should handle null channel`() {
-        val response = BackendResponse(channel = null)
+        val response = BackendResponse(data = BackendResponseData(channel = null))
 
+        assertThat(response.data?.channel).isNull()
         assertThat(response.channel).isNull()
     }
 
@@ -150,5 +165,15 @@ class BackendResponseTest {
         val response = BackendResponse(users = users)
 
         assertThat(response.users).hasSize(50)
+    }
+
+    @Test
+    fun `should expose channel data within nested data object`() {
+        val response = BackendResponse(
+            data = BackendResponseData(channel = "canal-3", channelLabel = "3")
+        )
+
+        assertThat(response.data?.channel).isEqualTo("canal-3")
+        assertThat(response.data?.channelLabel).isEqualTo("3")
     }
 }

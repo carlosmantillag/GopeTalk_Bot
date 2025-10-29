@@ -165,6 +165,30 @@ class VoiceInteractionPresenterEdgeCasesTest {
     }
 
     @Test
+    fun `handleBackendResponse with message should speak it`() = runTest {
+        val mockFile = mockk<File>(relaxed = true)
+        val audioData = AudioData(mockFile, 16000, 1, AudioFormat.PCM_16BIT)
+        
+        val jsonResponse = """{"message":"Conectado al canal 1","text":"","action":""}"""
+        every { 
+            sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
+        } answers {
+            lambda<(ApiResponse) -> Unit>().captured.invoke(
+                ApiResponse.Success(200, jsonResponse)
+            )
+        }
+
+        every { getRecordedAudioUseCase.execute() } returns flowOf(audioData)
+        
+        presenter.start()
+        advanceUntilIdle()
+
+        verify { speakTextUseCase.execute("Conectado al canal 1", any()) }
+        
+        presenter.stop()
+    }
+
+    @Test
     fun `handleBackendResponse with whitespace text should not speak`() = runTest {
         val mockFile = mockk<File>(relaxed = true)
         val audioData = AudioData(mockFile, 16000, 1, AudioFormat.PCM_16BIT)

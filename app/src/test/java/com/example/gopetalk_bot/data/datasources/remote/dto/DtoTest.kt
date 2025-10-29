@@ -119,6 +119,10 @@ class DtoTest {
     fun `BackendResponse should be created with default values`() {
         val response = BackendResponse()
         
+        assertThat(response.status).isEmpty()
+        assertThat(response.intent).isEmpty()
+        assertThat(response.message).isEmpty()
+        assertThat(response.data).isNull()
         assertThat(response.text).isEmpty()
         assertThat(response.action).isEmpty()
         assertThat(response.channels).isEmpty()
@@ -131,6 +135,10 @@ class DtoTest {
     @Test
     fun `BackendResponse should be created with custom values`() {
         val response = BackendResponse(
+            status = "ok",
+            intent = "request_channel_connect",
+            message = "Conectado al canal 1",
+            data = BackendResponseData(channel = "canal-1", channelLabel = "1"),
             text = "Hello",
             action = "message",
             channels = listOf("general", "tech"),
@@ -140,6 +148,11 @@ class DtoTest {
             channel = "general"
         )
         
+        assertThat(response.status).isEqualTo("ok")
+        assertThat(response.intent).isEqualTo("request_channel_connect")
+        assertThat(response.message).isEqualTo("Conectado al canal 1")
+        assertThat(response.data?.channel).isEqualTo("canal-1")
+        assertThat(response.data?.channelLabel).isEqualTo("1")
         assertThat(response.text).isEqualTo("Hello")
         assertThat(response.action).isEqualTo("message")
         assertThat(response.channels).containsExactly("general", "tech")
@@ -153,6 +166,10 @@ class DtoTest {
     fun `BackendResponse should deserialize from JSON correctly`() {
         val json = """
             {
+                "status": "ok",
+                "intent": "request_channel_connect",
+                "message": "Conectado al canal 1",
+                "data": {"channel":"canal-1","channel_label":"1"},
                 "text": "Hello World",
                 "action": "list_channels",
                 "channels": ["general", "tech", "music"],
@@ -165,6 +182,11 @@ class DtoTest {
         
         val response = gson.fromJson(json, BackendResponse::class.java)
         
+        assertThat(response.status).isEqualTo("ok")
+        assertThat(response.intent).isEqualTo("request_channel_connect")
+        assertThat(response.message).isEqualTo("Conectado al canal 1")
+        assertThat(response.data?.channel).isEqualTo("canal-1")
+        assertThat(response.data?.channelLabel).isEqualTo("1")
         assertThat(response.text).isEqualTo("Hello World")
         assertThat(response.action).isEqualTo("list_channels")
         assertThat(response.channels).containsExactly("general", "tech", "music")
@@ -176,31 +198,36 @@ class DtoTest {
 
     @Test
     fun `BackendResponse should handle partial JSON`() {
-        val json = """{"text": "Hello"}"""
+        val json = """{"message": "Hola", "data":{"channel":"general"}}"""
         val response = gson.fromJson(json, BackendResponse::class.java)
         
-        assertThat(response.text).isEqualTo("Hello")
+        assertThat(response.message).isEqualTo("Hola")
+        assertThat(response.data?.channel).isEqualTo("general")
         assertThat(response.action).isEmpty()
-        assertThat(response.channels).isEmpty()
+        assertThat(response.text).isEmpty()
     }
 
     @Test
     fun `BackendResponse should serialize to JSON correctly`() {
         val response = BackendResponse(
-            text = "Test message",
-            action = "send_message"
+            status = "ok",
+            intent = "notify",
+            message = "Todo listo",
+            data = BackendResponseData(channel = "general", channelLabel = "1")
         )
         val json = gson.toJson(response)
         
-        assertThat(json).contains("\"text\":\"Test message\"")
-        assertThat(json).contains("\"action\":\"send_message\"")
+        assertThat(json).contains("\"status\":\"ok\"")
+        assertThat(json).contains("\"intent\":\"notify\"")
+        assertThat(json).contains("\"message\":\"Todo listo\"")
+        assertThat(json).contains("\"data\":{\"channel\":\"general\",\"channel_label\":\"1\"}")
     }
 
     @Test
     fun `BackendResponse should support equality`() {
-        val response1 = BackendResponse(text = "Hello", action = "message")
-        val response2 = BackendResponse(text = "Hello", action = "message")
-        val response3 = BackendResponse(text = "Goodbye", action = "logout")
+        val response1 = BackendResponse(message = "Hello", intent = "message")
+        val response2 = BackendResponse(message = "Hello", intent = "message")
+        val response3 = BackendResponse(message = "Goodbye", intent = "logout")
         
         assertThat(response1).isEqualTo(response2)
         assertThat(response1).isNotEqualTo(response3)
@@ -208,11 +235,11 @@ class DtoTest {
 
     @Test
     fun `BackendResponse should support copy`() {
-        val response1 = BackendResponse(text = "Hello", action = "message")
-        val response2 = response1.copy(text = "Goodbye")
+        val response1 = BackendResponse(message = "Hello", intent = "message")
+        val response2 = response1.copy(message = "Goodbye")
         
-        assertThat(response2.text).isEqualTo("Goodbye")
-        assertThat(response2.action).isEqualTo("message")
+        assertThat(response2.message).isEqualTo("Goodbye")
+        assertThat(response2.intent).isEqualTo("message")
     }
 
     @Test

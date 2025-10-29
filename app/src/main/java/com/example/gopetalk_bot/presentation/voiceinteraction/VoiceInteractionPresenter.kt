@@ -179,11 +179,14 @@ class VoiceInteractionPresenter(
     }
 
     private fun handleBackendResponse(response: BackendResponse) {
-        updateChannelIfChanged(response.channel)
+        val channelFromResponse = response.data?.channel ?: response.channel
+        updateChannelIfChanged(channelFromResponse)
         
-        val responseText = response.text.ifBlank {
+        val responseText = sequenceOf(
+            response.message,
+            response.text,
             getActionResponseText(response)
-        }
+        ).firstOrNull { it.isNotBlank() }.orEmpty()
 
         if (responseText.isNotBlank()) {
             speak(responseText)
@@ -204,6 +207,7 @@ class VoiceInteractionPresenter(
                 handleLogout()
                 "Cerrando sesión, hasta luego"
             }
+            "" -> ""
             else -> "Acción no reconocida"
         }
     }

@@ -423,7 +423,14 @@ class VoiceInteractionPresenterTest {
             format = AudioFormat.PCM_16BIT
         )
         
-        val jsonResponse = """{"text":"Respuesta del servidor","channel":"general"}"""
+        val jsonResponse = """
+            {
+                "status":"ok",
+                "intent":"request_channel_connect",
+                "message":"Conectado al canal 1",
+                "data":{"channel":"canal-1","channel_label":"1"}
+            }
+        """.trimIndent()
         every { 
             sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
         } answers {
@@ -437,7 +444,7 @@ class VoiceInteractionPresenterTest {
         presenter.start()
         pumpTasks()
 
-        verify { speakTextUseCase.execute("Respuesta del servidor", any()) }
+        verify { speakTextUseCase.execute("Conectado al canal 1", any()) }
     }
 
     @Test
@@ -611,7 +618,12 @@ class VoiceInteractionPresenterTest {
             format = AudioFormat.PCM_16BIT
         )
         
-        val jsonResponse = """{"text":"Canal actualizado","channel":"tech"}"""
+        val jsonResponse = """
+            {
+                "message":"Canal actualizado",
+                "data":{"channel":"tech","channel_label":"T"}
+            }
+        """.trimIndent()
         every { 
             sendAudioCommandUseCase.execute(any<AudioData>(), captureLambda())
         } answers {
