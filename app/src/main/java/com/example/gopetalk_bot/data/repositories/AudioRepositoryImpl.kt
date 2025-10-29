@@ -75,4 +75,16 @@ class AudioRepositoryImpl(
         recordingStoppedCallback = null
         errorCallback = null
     }
+    
+    override fun getAdaptiveStatus(): String {
+        return audioDataSource.getAdaptiveStatus()
+    }
+    
+    override fun resetAdaptiveSystem() {
+        audioDataSource.resetAdaptiveSystem()
+    }
+    
+    override fun forceRecalibration() {
+        audioDataSource.forceRecalibration()
+    }
 }

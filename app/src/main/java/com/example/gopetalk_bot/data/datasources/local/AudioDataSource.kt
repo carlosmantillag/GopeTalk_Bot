@@ -16,9 +16,6 @@ import kotlin.concurrent.thread
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-/**
- * Interface para obtener el buffer size - permite testing sin Robolectric
- */
 interface AudioBufferProvider {
     fun getMinBufferSize(sampleRate: Int, channelConfig: Int, audioFormat: Int): Int
 }
@@ -31,7 +28,9 @@ class AndroidAudioBufferProvider : AudioBufferProvider {
 
 class AudioDataSource(
     private val context: Context,
-    private val bufferProvider: AudioBufferProvider = AndroidAudioBufferProvider()
+    private val bufferProvider: AudioBufferProvider = AndroidAudioBufferProvider(),
+    private val adaptiveThresholdManager: AdaptiveNoiseThresholdManager = AdaptiveNoiseThresholdManager(),
+    private val voiceActivityDetector: VoiceActivityDetector = VoiceActivityDetector()
 ) {
 
     private companion object {
@@ -39,8 +38,8 @@ class AudioDataSource(
         const val SAMPLE_RATE = 16000
         const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        const val SILENCE_THRESHOLD_DB = 70f
         const val SILENCE_TIMEOUT_MS = 3000L
+        const val UNCONFIRMED_VOICE_TIMEOUT_MS = 1500L
         const val WAV_HEADER_SIZE = 44
         const val AUDIO_FILENAME = "command.wav"
         const val THREAD_JOIN_TIMEOUT = 500L
@@ -48,6 +47,7 @@ class AudioDataSource(
         const val RMS_DB_MULTIPLIER = 20
         const val BITS_PER_SAMPLE = 16
         const val CHANNELS = 1
+        const val STATUS_LOG_INTERVAL = 50
     }
 
     private var audioRecord: AudioRecord? = null
@@ -58,6 +58,8 @@ class AudioDataSource(
     @Volatile private var isRecording = false
     @Volatile private var isPaused = false
     @Volatile private var lastSoundTime = 0L
+    @Volatile private var voiceConfirmed = false
+    private var sampleCount = 0
 
     private val bufferSize by lazy { 
         bufferProvider.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
@@ -129,6 +131,13 @@ class AudioDataSource(
                 onAudioLevel(AudioLevelData(rmsDb))
 
                 if (!isPaused) {
+                    adaptiveThresholdManager.processAudioLevel(rmsDb, isRecording)
+                    
+                    sampleCount++
+                    if (sampleCount % STATUS_LOG_INTERVAL == 0) {
+                        logAdaptiveStatus(rmsDb)
+                    }
+                    
                     val result = processAudioData(data, read, rmsDb, fos, totalBytesRead, onRecordingStopped, onError)
                     fos = result.first
                     totalBytesRead = result.second
@@ -153,11 +162,26 @@ class AudioDataSource(
         var outputStream = fos
         var bytesRead = totalBytesRead
 
-        if (isSoundDetected(rmsDb)) {
+        val shortData = ShortArray(read / 2)
+        ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shortData)
+        
+        val isAboveThreshold = isSoundDetected(rmsDb)
+        val isVoice = voiceActivityDetector.isVoiceDetected(rmsDb, isAboveThreshold, shortData)
+        
+        if (isAboveThreshold && !isRecording) {
             lastSoundTime = System.currentTimeMillis()
-            if (!isRecording) {
-                outputStream = startNewRecording()
-            }
+            outputStream = startNewRecording()
+            voiceConfirmed = false
+            Log.d(TAG, "🎤 Sonido detectado, iniciando grabación temporal...")
+        }
+        
+        if (isVoice && !voiceConfirmed) {
+            voiceConfirmed = true
+            Log.d(TAG, "✓ VOZ CONFIRMADA - Grabación validada")
+        }
+        
+        if (isVoice || (isAboveThreshold && voiceConfirmed)) {
+            lastSoundTime = System.currentTimeMillis()
         }
 
         if (isRecording) {
@@ -165,8 +189,14 @@ class AudioDataSource(
             bytesRead += read
 
             if (isSilenceDetected()) {
-                Log.d(TAG, "Silence detected, stopping recording.")
-                stopRecordingAndFinalize(outputStream, bytesRead, onRecordingStopped, onError)
+                Log.d(TAG, "Silencio detectado, finalizando grabación...")
+                if (voiceConfirmed) {
+                    Log.d(TAG, "✓ Enviando audio al backend")
+                    stopRecordingAndFinalize(outputStream, bytesRead, onRecordingStopped, onError)
+                } else {
+                    Log.d(TAG, "✗ Descartando audio (no se confirmó voz)")
+                    discardRecording(outputStream)
+                }
                 return Pair(null, 0)
             }
         }
@@ -174,15 +204,25 @@ class AudioDataSource(
         return Pair(outputStream, bytesRead)
     }
 
-    private fun isSoundDetected(rmsDb: Float): Boolean = rmsDb > SILENCE_THRESHOLD_DB
+    private fun isSoundDetected(rmsDb: Float): Boolean {
+        val threshold = adaptiveThresholdManager.getCurrentThreshold()
+        return rmsDb > threshold
+    }
 
     private fun isSilenceDetected(): Boolean {
-        return System.currentTimeMillis() - lastSoundTime > SILENCE_TIMEOUT_MS
+        val elapsed = System.currentTimeMillis() - lastSoundTime
+        val timeout = if (voiceConfirmed) SILENCE_TIMEOUT_MS else UNCONFIRMED_VOICE_TIMEOUT_MS
+        
+        return elapsed > timeout
     }
 
     private fun startNewRecording(): FileOutputStream {
         isRecording = true
-        Log.d(TAG, "Sound detected, starting recording.")
+        val threshold = adaptiveThresholdManager.getCurrentThreshold()
+        val ambient = adaptiveThresholdManager.getAmbientNoiseLevel()
+        val environment = adaptiveThresholdManager.getEnvironmentType()
+        Log.d(TAG, "  - Ambiente: $environment (${String.format("%.1f", ambient)} dB)")
+        Log.d(TAG, "  - Umbral usado: ${String.format("%.1f", threshold)} dB")
         audioFile = File(context.cacheDir, AUDIO_FILENAME)
         val fos = FileOutputStream(audioFile)
         fos.write(ByteArray(WAV_HEADER_SIZE))
@@ -196,6 +236,7 @@ class AudioDataSource(
         onError: (String, Throwable?) -> Unit
     ) {
         isRecording = false
+        voiceActivityDetector.reset()
         try {
             fos?.close()
             audioFile?.let { file ->
@@ -208,6 +249,19 @@ class AudioDataSource(
             }
         } catch (e: IOException) {
             onError("Error closing file stream.", e)
+        }
+    }
+    
+    private fun discardRecording(fos: FileOutputStream?) {
+        isRecording = false
+        voiceConfirmed = false
+        voiceActivityDetector.reset()
+        try {
+            fos?.close()
+            audioFile?.delete()
+            audioFile = null
+        } catch (e: IOException) {
+            Log.e(TAG, "Error descartando grabación", e)
         }
     }
 
@@ -305,5 +359,42 @@ class AudioDataSource(
 
     fun release() {
         if (isMonitoring) stopMonitoring()
+    }
+    
+    /**
+     * Log periódico del estado del sistema adaptativo
+     */
+    private fun logAdaptiveStatus(currentRmsDb: Float) {
+        if (adaptiveThresholdManager.isCalibrated()) {
+            val threshold = adaptiveThresholdManager.getCurrentThreshold()
+            val ambient = adaptiveThresholdManager.getAmbientNoiseLevel()
+            val environment = adaptiveThresholdManager.getEnvironmentType()
+            Log.v(TAG, "Audio: ${String.format("%.1f", currentRmsDb)} dB | " +
+                      "Ambiente: $environment (${String.format("%.1f", ambient)} dB) | " +
+                      "Umbral: ${String.format("%.1f", threshold)} dB")
+        }
+    }
+    
+    /**
+     * Obtiene información del sistema adaptativo
+     */
+    fun getAdaptiveStatus(): String {
+        return adaptiveThresholdManager.getStatusInfo()
+    }
+    
+    /**
+     * Reinicia el sistema de calibración adaptativa
+     */
+    fun resetAdaptiveSystem() {
+        adaptiveThresholdManager.reset()
+        Log.i(TAG, "Sistema adaptativo reiniciado")
+    }
+    
+    /**
+     * Fuerza una recalibración del sistema
+     */
+    fun forceRecalibration() {
+        adaptiveThresholdManager.forceRecalibration()
+        Log.i(TAG, "Recalibración forzada")
     }
 }
