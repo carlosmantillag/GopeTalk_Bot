@@ -27,7 +27,8 @@
             android:name=".presentation.authentication.AuthenticationActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.GopeTalk_Bot">
+            android:theme="@style/Theme.GopeTalk_Bot"
+            android:configChanges="orientation|keyboardHidden|screenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
