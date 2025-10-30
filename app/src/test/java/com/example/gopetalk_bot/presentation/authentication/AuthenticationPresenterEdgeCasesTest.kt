@@ -104,7 +104,12 @@ class AuthenticationPresenterEdgeCasesTest {
         onTtsDoneSlot.captured.invoke(null)
         onResultCallback?.invoke("0123")
 
-        verify { speakTextUseCase.execute(match { it.contains("123") }, "auth_confirm_pin") }
+        verify {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "0123" },
+                "auth_confirm_pin"
+            )
+        }
     }
 
     @Test
@@ -150,6 +155,101 @@ class AuthenticationPresenterEdgeCasesTest {
         verify { view.logError(match { it.contains("Invalid PIN") }, null) }
     }
 
+    @Test
+    fun `handlePinInput should use first 4 digits when transcription has multiple PINs`() {
+        var onResultCallback: ((String) -> Unit)? = null
+        every { 
+            speechRecognizerDataSource.startListening(
+                onResult = captureLambda(),
+                onError = any()
+            )
+        } answers {
+            onResultCallback = lambda<(String) -> Unit>().captured
+        }
+
+        presenter.start()
+        onTtsDoneSlot.captured.invoke(null)
+        onResultCallback?.invoke("Carlos")
+        onTtsDoneSlot.captured.invoke(null)
+        onResultCallback?.invoke("9999 2222 3333 4444")
+
+        verify {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "4444" },
+                "auth_confirm_pin"
+            )
+        }
+    }
+
+    @Test
+    fun `handlePinInput should accept repeated PIN even if final attempt is incomplete`() {
+        var onResultCallback: ((String) -> Unit)? = null
+        every { 
+            speechRecognizerDataSource.startListening(
+                onResult = captureLambda(),
+                onError = any()
+            )
+        } answers {
+            onResultCallback = lambda<(String) -> Unit>().captured
+        }
+
+        presenter.start()
+        onTtsDoneSlot.captured.invoke(null)
+        onResultCallback?.invoke("Carlos")
+        onTtsDoneSlot.captured.invoke(null)
+        onResultCallback?.invoke("4444 4444 444")
+
+        verify {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "4444" },
+                "auth_confirm_pin"
+            )
+        }
+    }
+
+    @Test
+    fun `handlePinInput should accept repeated Spanish number words for each digit`() {
+        var onResultCallback: ((String) -> Unit)? = null
+        every { 
+            speechRecognizerDataSource.startListening(
+                onResult = captureLambda(),
+                onError = any()
+            )
+        } answers {
+            onResultCallback = lambda<(String) -> Unit>().captured
+        }
+
+        val cases = listOf(
+            "uno" to "1111",
+            "dos" to "2222",
+            "tres" to "3333",
+            "cuatro" to "4444",
+            "cinco" to "5555",
+            "seis" to "6666",
+            "siete" to "7777",
+            "ocho" to "8888",
+            "nueve" to "9999"
+        )
+
+        cases.forEach { (word, expectedDigits) ->
+            onResultCallback = null
+            clearMocks(speakTextUseCase, view, answers = false)
+
+            presenter.start()
+            onTtsDoneSlot.captured.invoke(null)
+            onResultCallback?.invoke("Carlos")
+            onTtsDoneSlot.captured.invoke(null)
+            onResultCallback?.invoke(List(4) { word }.joinToString(" "))
+
+            verify(exactly = 1) {
+                speakTextUseCase.execute(
+                    match { spokenText -> spokenText.filter(Char::isDigit) == expectedDigits },
+                    "auth_confirm_pin"
+                )
+            }
+        }
+    }
+
     // ==================== Number Conversion Edge Cases ====================
 
     @Test
@@ -170,7 +270,12 @@ class AuthenticationPresenterEdgeCasesTest {
         onTtsDoneSlot.captured.invoke(null)
         onResultCallback?.invoke("uno 2 tres 4")
 
-        verify { speakTextUseCase.execute(match { it.contains("1234") }, "auth_confirm_pin") }
+        verify {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "1234" },
+                "auth_confirm_pin"
+            )
+        }
     }
 
     @Test
@@ -191,7 +296,12 @@ class AuthenticationPresenterEdgeCasesTest {
         onTtsDoneSlot.captured.invoke(null)
         onResultCallback?.invoke("UNO DOS TRES CUATRO")
 
-        verify { speakTextUseCase.execute(match { it.contains("1234") }, "auth_confirm_pin") }
+        verify {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "1234" },
+                "auth_confirm_pin"
+            )
+        }
     }
 
     // Test comentado - demasiado complejo para el scope actual

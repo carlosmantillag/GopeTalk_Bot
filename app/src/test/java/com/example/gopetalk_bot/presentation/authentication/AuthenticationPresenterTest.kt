@@ -204,7 +204,12 @@ class AuthenticationPresenterTest {
         onTtsDoneSlot.captured.invoke(null)
         onResultCallback?.invoke("1234")
 
-        verify { speakTextUseCase.execute(match { it.contains("1234") }, "auth_confirm_pin") }
+        verify {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "1234" },
+                "auth_confirm_pin"
+            )
+        }
     }
 
     @Test
@@ -433,7 +438,12 @@ class AuthenticationPresenterTest {
         onTtsDoneSlot.captured.invoke(null)
         onResultCallback?.invoke("uno dos tres cuatro")
 
-        verify { speakTextUseCase.execute(match { it.contains("1234") }, "auth_confirm_pin") }
+        verify {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "1234" },
+                "auth_confirm_pin"
+            )
+        }
     }
 
     @Test
@@ -483,7 +493,12 @@ class AuthenticationPresenterTest {
         onTtsDoneSlot.captured.invoke(null)
         onResultCallback?.invoke("   ")
 
-        verify(exactly = 0) { speakTextUseCase.execute(match { it.contains("1234") }, "auth_confirm_pin") }
+        verify(exactly = 0) {
+            speakTextUseCase.execute(
+                match { spokenText -> spokenText.filter(Char::isDigit) == "1234" },
+                "auth_confirm_pin"
+            )
+        }
     }
 
     @Test

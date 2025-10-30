@@ -39,6 +39,19 @@ class AuthenticationPresenter(
         const val MSG_INVALID_CREDENTIALS = "Usuario ya registrado, PIN incorrecto"
         
         const val HTTP_UNAUTHORIZED = 401
+        private val NUMBER_WORD_MAP = mapOf(
+            "cero" to "0",
+            "uno" to "1",
+            "dos" to "2",
+            "tres" to "3",
+            "cuatro" to "4",
+            "cinco" to "5",
+            "seis" to "6",
+            "siete" to "7",
+            "ocho" to "8",
+            "nueve" to "9"
+        )
+        private val PIN_CONTIGUOUS_REGEX = Regex("\\b\\d{$PIN_LENGTH}\\b")
     }
 
     private enum class AuthState {
@@ -173,16 +186,24 @@ class AuthenticationPresenter(
     private fun handlePinInput(transcription: String) {
         if (transcription.isBlank()) return
         
-        val pinString = convertWordsToNumbers(transcription)
-        view.logInfo("PIN captured: $transcription -> $pinString")
+        val rawPin = convertWordsToNumbers(transcription)
+        val candidatePin = if (isValidPin(rawPin)) {
+            rawPin
+        } else {
+            extractPinDigits(transcription)
+        }
+
+        view.logInfo(
+            "PIN captured: $transcription -> raw=$rawPin candidate=${candidatePin ?: "none"}"
+        )
         
-        if (isValidPin(pinString)) {
-            userPin = pinString.toInt()
-            val pinWithSpaces = pinString.toCharArray().joinToString(" ")
+        if (candidatePin != null && isValidPin(candidatePin)) {
+            userPin = candidatePin.toInt()
+            val pinWithSpaces = candidatePin.toCharArray().joinToString(" ")
             authState = AuthState.WAITING_FOR_PIN_CONFIRMATION
             speak(String.format(MSG_CONFIRM_PIN, pinWithSpaces), "auth_confirm_pin")
         } else {
-            view.logError("Invalid PIN format: $pinString", null)
+            view.logError("Invalid PIN format: $rawPin", null)
             speak(MSG_INVALID_PIN, "auth_invalid_pin")
         }
     }
@@ -291,30 +312,84 @@ class AuthenticationPresenter(
         shutdownTtsUseCase.execute()
         view.logInfo("Authentication Presenter stopped.")
     }
-    
-    private fun convertWordsToNumbers(text: String): String {
-        val numberMap = mapOf(
-            "cero" to "0", "uno" to "1", "dos" to "2", "tres" to "3", "cuatro" to "4",
-            "cinco" to "5", "seis" to "6", "siete" to "7", "ocho" to "8", "nueve" to "9"
-        )
 
-        var remainingText = text.lowercase().replace(" ", "")
-        val resultBuilder = StringBuilder()
+    private fun extractPinDigits(transcription: String): String? {
+        val normalized = normalizeTranscriptionForPin(transcription)
+        if (normalized.isEmpty()) return null
 
-        while (remainingText.isNotEmpty()) {
-            val match = numberMap.entries.find { (word, _) -> remainingText.startsWith(word) }
+        PIN_CONTIGUOUS_REGEX.findAll(normalized).lastOrNull()?.value?.let { return it }
 
-            if (match != null) {
-                resultBuilder.append(match.value)
-                remainingText = remainingText.substring(match.key.length)
-            } else if (remainingText.first().isDigit()) {
-                resultBuilder.append(remainingText.first())
-                remainingText = remainingText.substring(1)
+        val tokens = normalized.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return null
+
+        var current = StringBuilder()
+        var lastCandidate: String? = null
+        var hasPartialDigits = false
+        var candidateCount = 0
+
+        for (token in tokens) {
+            if (!token.all { it.isDigit() }) {
+                if (current.isNotEmpty()) {
+                    hasPartialDigits = true
+                    current = StringBuilder()
+                }
+                continue
+            }
+
+            if (token.length >= PIN_LENGTH) {
+                if (current.isNotEmpty()) {
+                    hasPartialDigits = true
+                    current = StringBuilder()
+                }
+
+                var index = 0
+                while (index + PIN_LENGTH <= token.length) {
+                    lastCandidate = token.substring(index, index + PIN_LENGTH)
+                    candidateCount++
+                    index += PIN_LENGTH
+                }
+
+                if (index != token.length) {
+                    hasPartialDigits = true
+                    current.append(token.substring(index))
+                }
             } else {
-                remainingText = remainingText.substring(1)
+                current.append(token)
+                when {
+                    current.length == PIN_LENGTH -> {
+                        lastCandidate = current.toString()
+                        candidateCount++
+                        current = StringBuilder()
+                    }
+                    current.length > PIN_LENGTH -> {
+                        hasPartialDigits = true
+                        current = StringBuilder()
+                    }
+                }
             }
         }
 
-        return resultBuilder.toString()
+        if (current.isNotEmpty()) {
+            hasPartialDigits = true
+        }
+
+        if (candidateCount == 0) return null
+
+        return if (candidateCount > 1 || !hasPartialDigits) lastCandidate else null
+    }
+
+    private fun normalizeTranscriptionForPin(text: String): String {
+        var normalized = text.lowercase()
+        NUMBER_WORD_MAP.forEach { (word, digit) ->
+            normalized = normalized.replace(Regex("\\b${Regex.escape(word)}\\b"), digit)
+        }
+        normalized = normalized.replace(Regex("[^0-9\\s]"), " ")
+        return normalized.replace(Regex("\\s+"), " ").trim()
+    }
+    
+    private fun convertWordsToNumbers(text: String): String {
+        val normalized = normalizeTranscriptionForPin(text)
+        if (normalized.isEmpty()) return ""
+        return normalized.filter { it.isDigit() }
     }
 }
