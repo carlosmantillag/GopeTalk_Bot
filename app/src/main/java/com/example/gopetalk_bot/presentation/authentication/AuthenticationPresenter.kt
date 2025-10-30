@@ -196,10 +196,20 @@ class AuthenticationPresenter(
         view.logInfo(
             "PIN captured: $transcription -> raw=$rawPin candidate=${candidatePin ?: "none"}"
         )
-        
-        if (candidatePin != null && isValidPin(candidatePin)) {
-            userPin = candidatePin.toInt()
-            val pinWithSpaces = candidatePin.toCharArray().joinToString(" ")
+
+        var finalCandidate = candidatePin
+        if ((finalCandidate == null || !isValidPin(finalCandidate)) && rawPin.isNotEmpty() && rawPin.length in 2..3) {
+            // Verificar si todos los dígitos son iguales
+            if (rawPin.all { it == rawPin[0] }) {
+                val relleno = rawPin[0].toString().repeat(PIN_LENGTH)
+                view.logInfo("[PIN LOGIC] Autocompletar PIN por repetición de dígitos: $rawPin -> $relleno")
+                finalCandidate = relleno
+            }
+        }
+
+        if (finalCandidate != null && isValidPin(finalCandidate)) {
+            userPin = finalCandidate.toInt()
+            val pinWithSpaces = finalCandidate.toCharArray().joinToString(" ")
             authState = AuthState.WAITING_FOR_PIN_CONFIRMATION
             speak(String.format(MSG_CONFIRM_PIN, pinWithSpaces), "auth_confirm_pin")
         } else {
@@ -314,12 +324,18 @@ class AuthenticationPresenter(
     }
 
     private fun extractPinDigits(transcription: String): String? {
+        view.logInfo("[extractPinDigits] Transcription de entrada: '$transcription'")
         val normalized = normalizeTranscriptionForPin(transcription)
+        view.logInfo("[extractPinDigits] Normalizado: '$normalized'")
         if (normalized.isEmpty()) return null
 
-        PIN_CONTIGUOUS_REGEX.findAll(normalized).lastOrNull()?.value?.let { return it }
+        PIN_CONTIGUOUS_REGEX.findAll(normalized).lastOrNull()?.value?.let {
+            view.logInfo("[extractPinDigits] PIN contiguo encontrado: $it")
+            return it
+        }
 
         val tokens = normalized.split(Regex("\\s+")).filter { it.isNotBlank() }
+        view.logInfo("[extractPinDigits] Tokens: $tokens")
         if (tokens.isEmpty()) return null
 
         var current = StringBuilder()
@@ -346,6 +362,7 @@ class AuthenticationPresenter(
                 while (index + PIN_LENGTH <= token.length) {
                     lastCandidate = token.substring(index, index + PIN_LENGTH)
                     candidateCount++
+                    view.logInfo("[extractPinDigits] Nuevo candidato de token largo: $lastCandidate")
                     index += PIN_LENGTH
                 }
 
@@ -359,10 +376,12 @@ class AuthenticationPresenter(
                     current.length == PIN_LENGTH -> {
                         lastCandidate = current.toString()
                         candidateCount++
+                        view.logInfo("[extractPinDigits] Nuevo candidato concatenado: $lastCandidate")
                         current = StringBuilder()
                     }
                     current.length > PIN_LENGTH -> {
                         hasPartialDigits = true
+                        view.logInfo("[extractPinDigits] Descarte por exceso de longitud: ${current.toString()}")
                         current = StringBuilder()
                     }
                 }
@@ -371,25 +390,42 @@ class AuthenticationPresenter(
 
         if (current.isNotEmpty()) {
             hasPartialDigits = true
+            view.logInfo("[extractPinDigits] Tokens finales incompletos: ${current.toString()}")
         }
 
-        if (candidateCount == 0) return null
+        if (candidateCount == 0) {
+            view.logInfo("[extractPinDigits] Sin candidatos encontrados")
+            return null
+        }
 
+        view.logInfo("[extractPinDigits] Último candidato: $lastCandidate (candidates: $candidateCount, hasPartial: $hasPartialDigits)")
         return if (candidateCount > 1 || !hasPartialDigits) lastCandidate else null
     }
 
     private fun normalizeTranscriptionForPin(text: String): String {
+        view.logInfo("[normalizeTranscriptionForPin] Entrada: '$text'")
         var normalized = text.lowercase()
         NUMBER_WORD_MAP.forEach { (word, digit) ->
             normalized = normalized.replace(Regex("\\b${Regex.escape(word)}\\b"), digit)
         }
+        view.logInfo("[normalizeTranscriptionForPin] Después de conversión palabra a dígito: '$normalized'")
         normalized = normalized.replace(Regex("[^0-9\\s]"), " ")
-        return normalized.replace(Regex("\\s+"), " ").trim()
+        view.logInfo("[normalizeTranscriptionForPin] Después de limpiar símbolos: '$normalized'")
+        val result = normalized.replace(Regex("\\s+"), " ").trim()
+        view.logInfo("[normalizeTranscriptionForPin] Resultado final: '$result'")
+        return result
     }
     
     private fun convertWordsToNumbers(text: String): String {
+        view.logInfo("[convertWordsToNumbers] Entrada original: '$text'")
         val normalized = normalizeTranscriptionForPin(text)
-        if (normalized.isEmpty()) return ""
-        return normalized.filter { it.isDigit() }
+        view.logInfo("[convertWordsToNumbers] Normalizado: '$normalized'")
+        if (normalized.isEmpty()) {
+            view.logInfo("[convertWordsToNumbers] Resultado vacío")
+            return ""
+        }
+        val result = normalized.filter { it.isDigit() }
+        view.logInfo("[convertWordsToNumbers] PIN final convertido: $result")
+        return result
     }
 }
