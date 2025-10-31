@@ -1,43 +1,28 @@
 package com.example.gopetalk_bot.data.datasources.remote
 
-import android.os.Handler
-import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import com.example.gopetalk_bot.BuildConfig
-import com.example.gopetalk_bot.data.datasources.remote.dto.*
+import com.example.gopetalk_bot.data.datasources.remote.dto.AudioRelayResponse
+import com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationRequest
+import com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationResponse
 import com.google.gson.Gson
-import okhttp3.*
+import okhttp3.MediaType
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.ResponseBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.*
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
-
-interface MainThreadExecutor {
-    fun post(runnable: Runnable)
-}
-
-class AndroidMainThreadExecutor : MainThreadExecutor {
-    private val handler = Handler(Looper.getMainLooper())
-    override fun post(runnable: Runnable) {
-        handler.post(runnable)
-    }
-}
-
-interface Base64Decoder {
-    fun decode(str: String, flags: Int): ByteArray
-}
-
-class AndroidBase64Decoder : Base64Decoder {
-    override fun decode(str: String, flags: Int): ByteArray {
-        return Base64.decode(str, flags)
-    }
-}
 
 class RemoteDataSource(
     private val mainThreadExecutor: MainThreadExecutor = AndroidMainThreadExecutor(),
@@ -128,8 +113,8 @@ class RemoteDataSource(
         Log.d(TAG, "Auth-Token: ${authToken?.take(20)}...")
     }
 
-    private fun createAudioCallback(callback: ApiCallback) = object : retrofit2.Callback<ResponseBody> {
-        override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
+    private fun createAudioCallback(callback: ApiCallback) = object : Callback<ResponseBody> {
+        override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
             if (response.isSuccessful) {
                 handleSuccessfulAudioResponse(response, callback)
             } else {
@@ -137,13 +122,13 @@ class RemoteDataSource(
             }
         }
 
-        override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
+        override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
             Log.e(TAG, "Retrofit error", t)
             postFailure(callback, "Failed to send audio: ${t.message}", t)
         }
     }
 
-    private fun handleSuccessfulAudioResponse(response: retrofit2.Response<ResponseBody>, callback: ApiCallback) {
+    private fun handleSuccessfulAudioResponse(response: Response<ResponseBody>, callback: ApiCallback) {
         response.body()?.let { responseBody ->
             val bodyString = responseBody.string()
             
@@ -202,9 +187,9 @@ class RemoteDataSource(
         return if (fileUrl.startsWith("http")) fileUrl else "$baseUrl$fileUrl"
     }
 
-    private fun createDownloadCallback(outputFile: File, callback: AudioDownloadCallback) = 
-        object : retrofit2.Callback<ResponseBody> {
-            override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
+    private fun createDownloadCallback(outputFile: File, callback: AudioDownloadCallback) =
+        object : Callback<ResponseBody> {
+            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 if (response.isSuccessful) {
                     response.body()?.let { saveAudioFile(it, outputFile, callback) }
                         ?: postDownloadFailure(callback, "Empty response body")
@@ -215,7 +200,7 @@ class RemoteDataSource(
                 }
             }
             
-            override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
+            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
                 Log.e(TAG, "Download failed", t)
                 postDownloadFailure(callback, "Failed to download audio: ${t.message}", t)
             }
@@ -246,8 +231,8 @@ class RemoteDataSource(
         apiService.authenticate(authRequest).enqueue(createAuthCallback(callback))
     }
 
-    private fun createAuthCallback(callback: AuthCallback) = object : retrofit2.Callback<ResponseBody> {
-        override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
+    private fun createAuthCallback(callback: AuthCallback) = object : Callback<ResponseBody> {
+        override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
             if (response.isSuccessful) {
                 handleAuthSuccess(response, callback)
             } else {
@@ -255,13 +240,13 @@ class RemoteDataSource(
             }
         }
 
-        override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
+        override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
             Log.e(TAG, "Authentication request failed", t)
             postAuthFailure(callback, "Failed to authenticate: ${t.message}", null, t)
         }
     }
 
-    private fun handleAuthSuccess(response: retrofit2.Response<ResponseBody>, callback: AuthCallback) {
+    private fun handleAuthSuccess(response: Response<ResponseBody>, callback: AuthCallback) {
         val bodyString = response.body()?.string() ?: ""
         try {
             val authResponse = gson.fromJson(bodyString, AuthenticationResponse::class.java)
@@ -274,7 +259,7 @@ class RemoteDataSource(
         }
     }
 
-    private fun handleAuthError(response: retrofit2.Response<ResponseBody>, callback: AuthCallback) {
+    private fun handleAuthError(response: Response<ResponseBody>, callback: AuthCallback) {
         val errorBody = response.errorBody()?.string() ?: UNKNOWN
         val statusCode = response.code()
         Log.e(TAG, "Authentication error $statusCode: $errorBody")
@@ -296,8 +281,8 @@ class RemoteDataSource(
         apiService.pollAudio(authToken).enqueue(createPollCallback(callback))
     }
 
-    private fun createPollCallback(callback: AudioPollCallback) = object : retrofit2.Callback<ResponseBody> {
-        override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
+    private fun createPollCallback(callback: AudioPollCallback) = object : Callback<ResponseBody> {
+        override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
             when (response.code()) {
                 HTTP_OK -> handlePolledAudio(response, callback)
                 HTTP_NO_CONTENT -> mainThreadExecutor.post { callback.onNoAudio() }
@@ -305,13 +290,13 @@ class RemoteDataSource(
             }
         }
 
-        override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
+        override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
             Log.e(TAG, "Polling failed", t)
             postPollFailure(callback, "Failed to poll audio: ${t.message}", t)
         }
     }
 
-    private fun handlePolledAudio(response: retrofit2.Response<ResponseBody>, callback: AudioPollCallback) {
+    private fun handlePolledAudio(response: Response<ResponseBody>, callback: AudioPollCallback) {
         response.body()?.let { body ->
             try {
                 val audioBytes = body.bytes()

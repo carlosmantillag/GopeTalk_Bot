@@ -16,16 +16,6 @@ import kotlin.concurrent.thread
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-interface AudioBufferProvider {
-    fun getMinBufferSize(sampleRate: Int, channelConfig: Int, audioFormat: Int): Int
-}
-
-class AndroidAudioBufferProvider : AudioBufferProvider {
-    override fun getMinBufferSize(sampleRate: Int, channelConfig: Int, audioFormat: Int): Int {
-        return AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    }
-}
-
 class AudioDataSource(
     private val context: Context,
     private val bufferProvider: AudioBufferProvider = AndroidAudioBufferProvider(),
@@ -372,17 +362,4 @@ class AudioDataSource(
         }
     }
 
-    fun getAdaptiveStatus(): String {
-        return adaptiveThresholdManager.getStatusInfo()
-    }
-
-    fun resetAdaptiveSystem() {
-        adaptiveThresholdManager.reset()
-        Log.i(TAG, "Sistema adaptativo reiniciado")
-    }
-
-    fun forceRecalibration() {
-        adaptiveThresholdManager.forceRecalibration()
-        Log.i(TAG, "Recalibración forzada")
-    }
 }

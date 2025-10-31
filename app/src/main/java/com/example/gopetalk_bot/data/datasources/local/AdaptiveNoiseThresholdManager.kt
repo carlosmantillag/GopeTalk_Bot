@@ -118,29 +118,4 @@ class AdaptiveNoiseThresholdManager(
         }
     }
 
-    fun getStatusInfo(): String {
-        return buildString {
-            appendLine("Estado del Sistema de Adaptación:")
-            appendLine("  - Calibrado: ${if (isCalibrated) "Sí" else "No (${ambientNoiseHistory.size}/$calibrationSamples muestras)"}")
-            appendLine("  - Ruido ambiente: %.1f dB".format(currentAmbientNoiseDb))
-            appendLine("  - Umbral actual: %.1f dB".format(dynamicThresholdDb))
-            appendLine("  - Tipo de ambiente: ${getEnvironmentType()}")
-            appendLine("  - Margen de seguridad: %.1f dB".format(thresholdMarginDb))
-        }
-    }
-
-    fun reset() {
-        ambientNoiseHistory.clear()
-        currentAmbientNoiseDb = NORMAL_ENVIRONMENT_DB
-        dynamicThresholdDb = NORMAL_ENVIRONMENT_DB + thresholdMarginDb
-        isCalibrated = false
-        samplesSinceLastUpdate = 0
-        Log.i(TAG, "Sistema de adaptación reiniciado")
-    }
-
-    fun forceRecalibration() {
-        if (isCalibrated) {
-            recalibrate()
-        }
-    }
 }

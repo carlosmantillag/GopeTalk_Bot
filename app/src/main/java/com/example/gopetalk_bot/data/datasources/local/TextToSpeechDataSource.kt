@@ -1,47 +1,9 @@
 package com.example.gopetalk_bot.data.datasources.local
 
 import android.content.Context
-import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
-
-interface TtsEngine {
-    fun speak(text: String, queueMode: Int, params: Bundle?, utteranceId: String): Int
-    fun stop(): Int
-    fun shutdown()
-    fun setLanguage(locale: Locale): Int
-    fun setOnUtteranceProgressListener(listener: UtteranceProgressListener?)
-}
-
-class AndroidTtsEngine(private val tts: TextToSpeech) : TtsEngine {
-    override fun speak(text: String, queueMode: Int, params: Bundle?, utteranceId: String): Int {
-        return tts.speak(text, queueMode, params, utteranceId)
-    }
-    
-    override fun stop(): Int = tts.stop()
-
-    override fun shutdown() = tts.shutdown()
-    
-    override fun setLanguage(locale: Locale): Int {
-        return tts.setLanguage(locale)
-    }
-    
-    override fun setOnUtteranceProgressListener(listener: UtteranceProgressListener?) {
-        tts.setOnUtteranceProgressListener(listener)
-    }
-}
-
-interface TtsEngineFactory {
-    fun create(context: Context, onInit: (Int) -> Unit): TtsEngine
-}
-
-class AndroidTtsEngineFactory : TtsEngineFactory {
-    override fun create(context: Context, onInit: (Int) -> Unit): TtsEngine {
-        val tts = TextToSpeech(context, onInit)
-        return AndroidTtsEngine(tts)
-    }
-}
 
 class TextToSpeechDataSource(
     context: Context,

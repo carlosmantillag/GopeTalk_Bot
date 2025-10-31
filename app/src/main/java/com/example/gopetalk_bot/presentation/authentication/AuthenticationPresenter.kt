@@ -6,7 +6,11 @@ import com.example.gopetalk_bot.data.datasources.local.SpeechRecognizerDataSourc
 import com.example.gopetalk_bot.data.datasources.local.UserPreferences
 import com.example.gopetalk_bot.data.datasources.remote.dto.AuthenticationResponse
 import com.example.gopetalk_bot.domain.entities.ApiResponse
-import com.example.gopetalk_bot.domain.usecases.*
+import com.example.gopetalk_bot.domain.usecases.CheckPermissionsUseCase
+import com.example.gopetalk_bot.domain.usecases.SendAuthenticationUseCase
+import com.example.gopetalk_bot.domain.usecases.SetTtsListenerUseCase
+import com.example.gopetalk_bot.domain.usecases.ShutdownTtsUseCase
+import com.example.gopetalk_bot.domain.usecases.SpeakTextUseCase
 import com.google.gson.Gson
 
 class AuthenticationPresenter(

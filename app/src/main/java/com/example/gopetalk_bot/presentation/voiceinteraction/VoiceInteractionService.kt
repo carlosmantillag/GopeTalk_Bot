@@ -1,6 +1,9 @@
 package com.example.gopetalk_bot.presentation.voiceinteraction
 
-import android.app.*
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -8,10 +11,9 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.gopetalk_bot.R
-import com.example.gopetalk_bot.data.datasources.local.*
-import com.example.gopetalk_bot.data.datasources.remote.*
-import com.example.gopetalk_bot.data.repositories.*
-import com.example.gopetalk_bot.domain.usecases.*
+import com.example.gopetalk_bot.data.datasources.local.UserPreferences
+import com.example.gopetalk_bot.di.ServiceLocator
+import com.example.gopetalk_bot.presentation.authentication.AuthenticationActivity
 
 class VoiceInteractionService : Service(), VoiceInteractionContract.View {
 
@@ -40,49 +42,8 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
     }
 
     private fun initializePresenter() {
-        val userPreferences = UserPreferences(this)
-        val audioRepository = createAudioRepository()
-        val apiRepository = createApiRepository(userPreferences)
-        val ttsRepository = createTtsRepository()
-        val webSocketRepository = createWebSocketRepository()
-        val audioPlayerRepository = createAudioPlayerRepository()
-
-        presenter = VoiceInteractionPresenter(
-            view = this,
-            startAudioMonitoringUseCase = StartAudioMonitoringUseCase(audioRepository),
-            stopAudioMonitoringUseCase = StopAudioMonitoringUseCase(audioRepository),
-            pauseAudioRecordingUseCase = PauseAudioRecordingUseCase(audioRepository),
-            resumeAudioRecordingUseCase = ResumeAudioRecordingUseCase(audioRepository),
-            monitorAudioLevelUseCase = MonitorAudioLevelUseCase(audioRepository),
-            getRecordedAudioUseCase = GetRecordedAudioUseCase(audioRepository),
-            sendAudioCommandUseCase = SendAudioCommandUseCase(apiRepository),
-            speakTextUseCase = SpeakTextUseCase(ttsRepository),
-            setTtsListenerUseCase = SetTtsListenerUseCase(ttsRepository),
-            shutdownTtsUseCase = ShutdownTtsUseCase(ttsRepository),
-            connectWebSocketUseCase = ConnectWebSocketUseCase(webSocketRepository),
-            disconnectWebSocketUseCase = DisconnectWebSocketUseCase(webSocketRepository),
-            playAudioFileUseCase = PlayAudioFileUseCase(audioPlayerRepository),
-            updateWebSocketChannelUseCase = UpdateWebSocketChannelUseCase(webSocketRepository),
-            pollAudioUseCase = PollAudioUseCase(apiRepository),
-            userPreferences = userPreferences
-        )
+        presenter = ServiceLocator.provideVoiceInteractionPresenter(this)
     }
-
-    private fun createAudioRepository() = AudioRepositoryImpl(AudioDataSource(this))
-
-    private fun createApiRepository(userPreferences: UserPreferences) = 
-        ApiRepositoryImpl(RemoteDataSource(), userPreferences)
-
-    private fun createTtsRepository() = TextToSpeechRepositoryImpl(
-        TextToSpeechDataSource(
-            context = this,
-            onInitError = { error -> logError("TTS Error: $error") }
-        )
-    )
-
-    private fun createWebSocketRepository() = WebSocketRepositoryImpl(WebSocketDataSource())
-
-    private fun createAudioPlayerRepository() = AudioPlayerRepositoryImpl(AudioPlayerDataSource())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         handleIntent(intent)
@@ -110,7 +71,7 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         userPreferences.clearSession()
         
         // Navegar de vuelta a la pantalla de autenticación
-        val intent = Intent(this, com.example.gopetalk_bot.presentation.authentication.AuthenticationActivity::class.java)
+        val intent = Intent(this, AuthenticationActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         

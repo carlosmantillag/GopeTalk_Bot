@@ -59,7 +59,6 @@ class AudioDataSourceTest {
         every { mockAdaptiveThresholdManager.getAmbientNoiseLevel() } returns 60f
         every { mockAdaptiveThresholdManager.getEnvironmentType() } returns "Normal"
         every { mockAdaptiveThresholdManager.isCalibrated() } returns true
-        every { mockAdaptiveThresholdManager.getStatusInfo() } returns "OK"
         every { mockVoiceActivityDetector.isVoiceDetected(any(), any(), any()) } returns false
         every { mockVoiceActivityDetector.reset() } just Runs
         

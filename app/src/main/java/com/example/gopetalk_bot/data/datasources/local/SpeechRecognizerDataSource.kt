@@ -1,62 +1,9 @@
 package com.example.gopetalk_bot.data.datasources.local
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import java.util.Locale
-
-interface SpeechRecognizerWrapper {
-    fun setRecognitionListener(listener: RecognitionListener)
-    fun startListening(intent: Intent)
-    fun stopListening()
-    fun destroy()
-}
-
-class AndroidSpeechRecognizerWrapper(private val recognizer: SpeechRecognizer) : SpeechRecognizerWrapper {
-    override fun setRecognitionListener(listener: RecognitionListener) {
-        recognizer.setRecognitionListener(listener)
-    }
-    
-    override fun startListening(intent: Intent) {
-        recognizer.startListening(intent)
-    }
-    
-    override fun stopListening() {
-        recognizer.stopListening()
-    }
-    
-    override fun destroy() {
-        recognizer.destroy()
-    }
-}
-
-interface SpeechRecognizerFactory {
-    fun isRecognitionAvailable(context: Context): Boolean
-    fun createRecognizer(context: Context): SpeechRecognizerWrapper
-    fun createRecognitionIntent(): Intent
-}
-
-class AndroidSpeechRecognizerFactory : SpeechRecognizerFactory {
-    override fun isRecognitionAvailable(context: Context): Boolean {
-        return SpeechRecognizer.isRecognitionAvailable(context)
-    }
-    
-    override fun createRecognizer(context: Context): SpeechRecognizerWrapper {
-        return AndroidSpeechRecognizerWrapper(SpeechRecognizer.createSpeechRecognizer(context))
-    }
-    
-    override fun createRecognitionIntent(): Intent {
-        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-        }
-    }
-}
 
 class SpeechRecognizerDataSource(
     private val context: Context,

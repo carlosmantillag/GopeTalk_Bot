@@ -1,5 +1,6 @@
 package com.example.gopetalk_bot.presentation.main
 
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -12,16 +13,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.example.gopetalk_bot.data.datasources.local.PermissionDataSource
-import com.example.gopetalk_bot.data.datasources.local.UserPreferences
-import com.example.gopetalk_bot.data.repositories.PermissionRepositoryImpl
-import com.example.gopetalk_bot.data.repositories.UserRepositoryImpl
-import com.example.gopetalk_bot.domain.usecases.CheckPermissionsUseCase
+import com.example.gopetalk_bot.di.ServiceLocator
 import com.example.gopetalk_bot.presentation.common.AudioRmsMonitor
 import com.example.gopetalk_bot.presentation.voiceinteraction.VoiceInteractionService
 import com.example.gopetalk_bot.ui.theme.GopeTalk_BotTheme
 
 class MainActivity : ComponentActivity(), MainContract.View {
+
+    override val context: Context
+        get() = this
 
     private lateinit var presenter: MainContract.Presenter
 
@@ -34,14 +34,8 @@ class MainActivity : ComponentActivity(), MainContract.View {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val permissionDataSource = PermissionDataSource(this)
-        val permissionRepository = PermissionRepositoryImpl(permissionDataSource)
-        val checkPermissionsUseCase = CheckPermissionsUseCase(permissionRepository)
-        val userPreferences = UserPreferences(this)
-        val userRepository = UserRepositoryImpl(userPreferences)
-        
-        presenter = MainPresenter(this, checkPermissionsUseCase, userRepository)
-        
+        presenter = ServiceLocator.provideMainPresenter(this)
+
         // Check permissions and start voice service
         presenter.onViewCreated()
 

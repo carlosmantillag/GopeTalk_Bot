@@ -4,22 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.core.content.ContextCompat
-
-interface PermissionChecker {
-    fun checkPermission(context: Context, permission: String): Int
-    fun getSdkVersion(): Int
-}
-
-class AndroidPermissionChecker : PermissionChecker {
-    override fun checkPermission(context: Context, permission: String): Int {
-        return ContextCompat.checkSelfPermission(context, permission)
-    }
-    
-    override fun getSdkVersion(): Int {
-        return Build.VERSION.SDK_INT
-    }
-}
 
 class PermissionDataSource(
     private val context: Context,

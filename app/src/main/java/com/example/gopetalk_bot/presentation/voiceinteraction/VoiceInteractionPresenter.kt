@@ -8,10 +8,32 @@ import com.example.gopetalk_bot.domain.entities.ApiResponse
 import com.example.gopetalk_bot.domain.entities.AudioData
 import com.example.gopetalk_bot.domain.repositories.AudioPlayerRepository
 import com.example.gopetalk_bot.domain.repositories.WebSocketRepository
-import com.example.gopetalk_bot.domain.usecases.*
+import com.example.gopetalk_bot.domain.usecases.ConnectWebSocketUseCase
+import com.example.gopetalk_bot.domain.usecases.DisconnectWebSocketUseCase
+import com.example.gopetalk_bot.domain.usecases.GetRecordedAudioUseCase
+import com.example.gopetalk_bot.domain.usecases.MonitorAudioLevelUseCase
+import com.example.gopetalk_bot.domain.usecases.PauseAudioRecordingUseCase
+import com.example.gopetalk_bot.domain.usecases.PlayAudioFileUseCase
+import com.example.gopetalk_bot.domain.usecases.PollAudioUseCase
+import com.example.gopetalk_bot.domain.usecases.ResumeAudioRecordingUseCase
+import com.example.gopetalk_bot.domain.usecases.SendAudioCommandUseCase
+import com.example.gopetalk_bot.domain.usecases.SetTtsListenerUseCase
+import com.example.gopetalk_bot.domain.usecases.ShutdownTtsUseCase
+import com.example.gopetalk_bot.domain.usecases.SpeakTextUseCase
+import com.example.gopetalk_bot.domain.usecases.StartAudioMonitoringUseCase
+import com.example.gopetalk_bot.domain.usecases.StopAudioMonitoringUseCase
+import com.example.gopetalk_bot.domain.usecases.UpdateWebSocketChannelUseCase
 import com.example.gopetalk_bot.presentation.common.AudioRmsMonitor
 import com.google.gson.Gson
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
@@ -205,7 +227,22 @@ class VoiceInteractionPresenter(
     private fun handleBackendResponse(response: BackendResponse) {
         val channelFromResponse = response.data?.channel ?: response.channel
         updateChannelIfChanged(channelFromResponse)
-        
+
+        when (response.action.lowercase()) {
+            "list_channels" -> {
+                handleListChannels(response.channels)
+                return
+            }
+            "list_users" -> {
+                handleListUsers(response.users)
+                return
+            }
+            "logout" -> {
+                handleLogout()
+                return
+            }
+        }
+
         val responseText = sequenceOf(
             response.message,
             response.text,
@@ -214,6 +251,30 @@ class VoiceInteractionPresenter(
         if (responseText.isNotBlank()) {
             speak(responseText)
         }
+    }
+
+    private fun handleListChannels(channels: List<String>) {
+        if (channels.isEmpty()) {
+            speak("Por ahora no hay canales disponibles.")
+        } else {
+            val channelList = channels.joinToString(", ")
+            speak("Estos son los canales disponibles: $channelList")
+        }
+    }
+
+    private fun handleListUsers(users: List<String>) {
+        if (users.isEmpty()) {
+            speak("No hay usuarios conectados en este momento.")
+        } else {
+            val userList = users.joinToString(", ")
+            speak("Estos son los usuarios conectados: $userList")
+        }
+    }
+
+    private fun handleLogout() {
+        view.logInfo("Logout requested")
+        view.logout()
+        speak("Cerrando sesión, hasta luego")
     }
 
     private fun updateChannelIfChanged(newChannel: String?) {

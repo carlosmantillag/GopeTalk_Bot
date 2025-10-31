@@ -13,8 +13,4 @@ interface AudioRepository {
     fun getAudioLevelStream(): Flow<AudioLevel>
     fun getRecordedAudioStream(): Flow<AudioData>
     fun release()
-    
-    fun getAdaptiveStatus(): String
-    fun resetAdaptiveSystem()
-    fun forceRecalibration()
 }
