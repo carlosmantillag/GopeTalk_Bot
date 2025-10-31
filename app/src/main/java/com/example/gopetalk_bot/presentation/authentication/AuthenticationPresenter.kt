@@ -26,9 +26,9 @@ class AuthenticationPresenter(
 ) : AuthenticationContract.Presenter {
 
     private companion object {
-        const val DELAY_AFTER_TTS = 50L
-        const val DELAY_BEFORE_PIN = 50L
-        const val DELAY_RETRY_LISTENING = 50L
+        const val DELAY_AFTER_TTS = 1L
+        const val DELAY_BEFORE_PIN = 1L
+        const val DELAY_RETRY_LISTENING = 1L
         const val DELAY_NAVIGATION = 1000L
         const val PIN_LENGTH = 4
         
