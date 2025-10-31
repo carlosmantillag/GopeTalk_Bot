@@ -69,16 +69,16 @@ class SpeechRecognizerDataSourceTest {
     fun `startListening should not start if already listening`() {
         dataSource = SpeechRecognizerDataSource(mockContext, mockFactory)
         
-        // Primera llamada
+        
         dataSource.startListening(onResultCallback, onErrorCallback)
         
-        // Simular que está listo
+        
         listenerSlot.captured.onReadyForSpeech(null)
         
-        // Segunda llamada mientras está escuchando
+        
         dataSource.startListening(onResultCallback, onErrorCallback)
 
-        // Solo debe crear el recognizer una vez
+        
         verify(exactly = 1) { mockFactory.createRecognizer(mockContext) }
     }
 
@@ -89,7 +89,7 @@ class SpeechRecognizerDataSourceTest {
         
         listenerSlot.captured.onReadyForSpeech(null)
         
-        // Intentar iniciar de nuevo debería ser ignorado
+        
         dataSource.startListening(onResultCallback, onErrorCallback)
         verify(exactly = 1) { mockFactory.createRecognizer(mockContext) }
     }
@@ -181,7 +181,7 @@ class SpeechRecognizerDataSourceTest {
         listenerSlot.captured.onReadyForSpeech(null)
         listenerSlot.captured.onEndOfSpeech()
         
-        // Ahora debería poder iniciar de nuevo
+        
         dataSource.startListening(onResultCallback, onErrorCallback)
         verify(exactly = 2) { mockFactory.createRecognizer(mockContext) }
     }
@@ -224,7 +224,7 @@ class SpeechRecognizerDataSourceTest {
         listenerSlot.captured.onReadyForSpeech(null)
         dataSource.release()
         
-        // Debería poder iniciar de nuevo después de release
+        
         dataSource.startListening(onResultCallback, onErrorCallback)
         verify(exactly = 2) { mockFactory.createRecognizer(mockContext) }
     }

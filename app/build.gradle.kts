@@ -107,7 +107,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// Configuración de Jacoco
+
 jacoco {
     toolVersion = "0.8.12"
 }
@@ -175,7 +175,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     })
 }
 
-// Tarea para ejecutar tests unitarios y generar reporte
+
 tasks.register("fullCoverageReport") {
     group = "verification"
     description = "Ejecuta tests unitarios y genera reporte de cobertura"

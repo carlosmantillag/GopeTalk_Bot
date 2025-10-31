@@ -30,7 +30,7 @@ class MainPresenter(
     private fun startServices() {
         view.startVoiceService()
         
-        // Obtener el nombre de usuario guardado y dar la bienvenida
+        
         val username = userRepository.getUsername()
         view.speakWelcomeMessage(username)
     }

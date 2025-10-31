@@ -20,12 +20,12 @@ class RemoteDataSourceTest {
         mockMainThreadExecutor = mockk(relaxed = true)
         mockBase64Decoder = mockk(relaxed = true)
         
-        // Mock para ejecutar inmediatamente
+        
         every { mockMainThreadExecutor.post(any()) } answers {
             firstArg<Runnable>().run()
         }
         
-        // Mock para Base64
+        
         every { mockBase64Decoder.decode(any(), any()) } returns ByteArray(100)
         
         dataSource = RemoteDataSource(mockMainThreadExecutor, mockBase64Decoder)
@@ -50,21 +50,21 @@ class RemoteDataSourceTest {
 
     @Test
     fun `AndroidMainThreadExecutor should implement MainThreadExecutor`() {
-        // No podemos instanciar AndroidMainThreadExecutor sin Robolectric
-        // pero podemos verificar que la interface existe
+        
+        
         assertThat(MainThreadExecutor::class.java).isNotNull()
     }
 
     @Test
     fun `AndroidBase64Decoder should implement Base64Decoder`() {
-        // No podemos instanciar AndroidBase64Decoder sin Robolectric
-        // pero podemos verificar que la interface existe
+        
+        
         assertThat(Base64Decoder::class.java).isNotNull()
     }
 
     @Test
     fun `RemoteDataSource should be instantiable with default parameters`() {
-        // Verificamos que la clase puede ser instanciada
+        
         assertThat(dataSource).isNotNull()
     }
 

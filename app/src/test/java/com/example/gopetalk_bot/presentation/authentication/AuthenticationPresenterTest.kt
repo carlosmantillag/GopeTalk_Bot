@@ -32,7 +32,7 @@ class AuthenticationPresenterTest {
 
     @Before
     fun setup() {
-        // Mock Handler para ejecutar inmediatamente
+        
         mockHandler = mockk<Handler>(relaxed = true)
         every { mockHandler.post(any()) } answers {
             firstArg<Runnable>().run()

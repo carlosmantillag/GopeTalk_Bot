@@ -25,7 +25,7 @@ class AudioPlayerDataSourceTest {
 
     @Before
     fun setup() {
-        // Mock Log first before anything else
+        
         mockkStatic("android.util.Log")
         every { Log.e(any(), any()) } returns 0
         every { Log.e(any(), any(), any()) } returns 0
@@ -86,17 +86,17 @@ class AudioPlayerDataSourceTest {
     
     @Test
     fun `stopPlayback should handle null media player`() {
-        // Should not throw exception
+        
         dataSource.stopPlayback()
     }
     
     @Test
     fun `release should call stopPlayback`() {
-        // Should not throw exception
+        
         dataSource.release()
     }
 
-    // ==================== Additional Edge Cases ====================
+    
 
     @Test
     fun `isPlaying should return false after release`() {
@@ -113,7 +113,7 @@ class AudioPlayerDataSourceTest {
         dataSource.release()
         dataSource.release()
         
-        // Should not throw exception
+        
         assertThat(dataSource.isPlaying()).isFalse()
     }
 }

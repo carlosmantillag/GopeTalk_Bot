@@ -203,7 +203,7 @@ class AuthenticationPresenter(
 
         var finalCandidate = candidatePin
         if ((finalCandidate == null || !isValidPin(finalCandidate)) && rawPin.isNotEmpty() && rawPin.length in 2..3) {
-            // Verificar si todos los dígitos son iguales
+            
             if (rawPin.all { it == rawPin[0] }) {
                 val relleno = rawPin[0].toString().repeat(PIN_LENGTH)
                 view.logInfo("[PIN LOGIC] Autocompletar PIN por repetición de dígitos: $rawPin -> $relleno")

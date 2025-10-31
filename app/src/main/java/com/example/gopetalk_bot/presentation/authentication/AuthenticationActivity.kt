@@ -38,7 +38,7 @@ class AuthenticationActivity : ComponentActivity(), AuthenticationContract.View 
 
         val userPreferences = UserPreferences(this)
         
-        // Verificar si ya hay una sesión activa
+        
         if (userPreferences.hasActiveSession()) {
             logInfo("Active session found, navigating to MainActivity")
             navigateToMainActivity()

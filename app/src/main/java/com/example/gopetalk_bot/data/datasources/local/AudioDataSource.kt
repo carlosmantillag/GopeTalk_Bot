@@ -336,7 +336,7 @@ class AudioDataSource(
             recordingThread?.join(THREAD_JOIN_TIMEOUT)
             cleanupAudioRecord()
         } catch (e: Exception) {
-            // Error stopping AudioRecord
+            
         }
     }
 

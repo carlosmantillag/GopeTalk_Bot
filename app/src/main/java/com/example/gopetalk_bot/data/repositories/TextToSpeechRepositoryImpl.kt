@@ -9,7 +9,7 @@ class TextToSpeechRepositoryImpl(
 ) : TextToSpeechRepository {
 
     override fun initialize(onInitError: (String) -> Unit) {
-        // Initialization is done in the data source constructor
+        
     }
 
     override fun speak(text: String, utteranceId: String) {

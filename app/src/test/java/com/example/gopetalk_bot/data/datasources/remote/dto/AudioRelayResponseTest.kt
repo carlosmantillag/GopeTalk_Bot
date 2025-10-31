@@ -134,7 +134,7 @@ class AudioRelayResponseTest {
             channel = "general",
             recipients = listOf(1),
             audioBase64 = "data",
-            duration = 3600.5, // 1 hour
+            duration = 3600.5, 
             sampleRate = 16000,
             format = "wav"
         )

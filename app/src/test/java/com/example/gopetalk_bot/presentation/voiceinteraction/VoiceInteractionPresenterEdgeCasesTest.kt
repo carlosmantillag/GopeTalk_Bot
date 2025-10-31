@@ -22,10 +22,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 
-/**
- * Tests adicionales para aumentar cobertura de branch y line
- * en VoiceInteractionPresenter
- */
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceInteractionPresenterEdgeCasesTest {
 
@@ -138,7 +135,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         unmockkAll()
     }
 
-    // ==================== Backend Response Edge Cases ====================
+    
 
     @Test
     fun `handleBackendResponse with empty text should not speak`() = runTest {
@@ -212,11 +209,11 @@ class VoiceInteractionPresenterEdgeCasesTest {
         presenter.stop()
     }
 
-    // Test comentado - requiere manejo específico de JSON con null
-    // @Test
-    // fun `handleBackendResponse with channel null should update to null`() = runTest {
-    //     // Test que valida actualización de canal a null
-    // }
+    
+    
+    
+    
+    
 
     @Test
     fun `handleBackendResponse with empty channels list should speak empty message`() = runTest {
@@ -266,7 +263,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         presenter.stop()
     }
 
-    // ==================== TTS Listener Edge Cases ====================
+    
 
     @Test
     fun `TTS onStart with utteranceId should pause recording`() {
@@ -301,7 +298,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         presenter.stop()
     }
 
-    // ==================== WebSocket Edge Cases ====================
+    
 
     @Test
     fun `WebSocket onConnectionEstablished multiple times should log each time`() {
@@ -351,7 +348,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         presenter.stop()
     }
 
-    // ==================== Audio Playback Edge Cases ====================
+    
 
     @Test
     fun `playback onPlaybackCompleted should delete file even if delete fails`() = runTest {
@@ -388,7 +385,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         presenter.stop()
     }
 
-    // ==================== Lifecycle Edge Cases ====================
+    
 
     @Test
     fun `multiple start calls should be handled gracefully`() = runTest {
@@ -421,7 +418,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         verify(atLeast = 3) { disconnectWebSocketUseCase.execute() }
     }
 
-    // ==================== Channel Update Edge Cases ====================
+    
 
     @Test
     fun `updateChannel with empty string should update to empty`() {
@@ -447,7 +444,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         presenter.stop()
     }
 
-    // ==================== Welcome Message Edge Cases ====================
+    
 
     @Test
     fun `speakWelcome with empty username should still speak`() {
@@ -471,7 +468,7 @@ class VoiceInteractionPresenterEdgeCasesTest {
         verify { speakTextUseCase.execute(match { it.contains("José María") }, any()) }
     }
 
-    // ==================== Audio Level Monitoring Edge Cases ====================
+    
 
     @Test
     fun `monitorAudioLevel should handle zero rmsDb`() = runTest {

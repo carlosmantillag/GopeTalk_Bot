@@ -20,7 +20,7 @@ import org.junit.runners.Suite
 
 @RunWith(Suite::class)
 @Suite.SuiteClasses(
-    // Domain Layer - Use Cases
+    
     SendAudioCommandUseCaseTest::class,
     SpeakTextUseCaseTest::class,
     StartAudioMonitoringUseCaseTest::class,
@@ -39,13 +39,13 @@ import org.junit.runners.Suite
     PlayAudioFileUseCaseTest::class,
     PollAudioUseCaseTest::class,
     
-    // Domain Layer - Entities
+    
     ApiResponseTest::class,
     AudioDataTest::class,
     AudioLevelTest::class,
     PermissionStatusTest::class,
     
-    // Data Layer - DataSources
+    
     UserPreferencesTest::class,
     WebSocketDataSourceTest::class,
     RemoteDataSourceTest::class,
@@ -55,7 +55,7 @@ import org.junit.runners.Suite
     SpeechRecognizerDataSourceTest::class,
     AudioDataSourceTest::class,
     
-    // Data Layer - Repositories
+    
     UserRepositoryImplTest::class,
     PermissionRepositoryImplTest::class,
     ApiRepositoryImplTest::class,
@@ -63,10 +63,10 @@ import org.junit.runners.Suite
     WebSocketRepositoryImplTest::class,
     AudioRepositoryImplTest::class,
     
-    // Presentation Layer - Common
+    
     AudioRmsMonitorTest::class,
     
-    // Presentation Layer - Presenters
+    
     AuthenticationPresenterTest::class,
     MainPresenterTest::class,
     VoiceInteractionPresenterTest::class

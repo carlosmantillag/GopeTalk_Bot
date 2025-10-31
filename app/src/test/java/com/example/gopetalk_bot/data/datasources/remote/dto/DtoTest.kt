@@ -8,7 +8,7 @@ class DtoTest {
 
     private val gson = Gson()
 
-    // ==================== AuthenticationRequest Tests ====================
+    
 
     @Test
     fun `AuthenticationRequest should be created with correct values`() {
@@ -66,7 +66,7 @@ class DtoTest {
         assertThat(request3.pin).isEqualTo(123456)
     }
 
-    // ==================== AuthenticationResponse Tests ====================
+    
 
     @Test
     fun `AuthenticationResponse should be created with correct values`() {
@@ -113,7 +113,7 @@ class DtoTest {
         assertThat(response2.token).isEqualTo("token-123")
     }
 
-    // ==================== BackendResponse Tests ====================
+    
 
     @Test
     fun `BackendResponse should be created with default values`() {
@@ -277,7 +277,7 @@ class DtoTest {
         assertThat(response.text).isEqualTo("Logged out successfully")
     }
 
-    // ==================== AudioRelayResponse Tests ====================
+    
 
     @Test
     fun `AudioRelayResponse should be created with correct values`() {
@@ -420,15 +420,15 @@ class DtoTest {
         }
     }
 
-    // ==================== Integration Tests ====================
+    
 
     @Test
     fun `All DTOs should work together in authentication flow`() {
-        // Create request
+        
         val request = AuthenticationRequest("Carlos", 1234)
         val requestJson = gson.toJson(request)
         
-        // Simulate server response
+        
         val responseJson = """{"message":"Welcome Carlos","token":"abc123"}"""
         val response = gson.fromJson(responseJson, AuthenticationResponse::class.java)
         

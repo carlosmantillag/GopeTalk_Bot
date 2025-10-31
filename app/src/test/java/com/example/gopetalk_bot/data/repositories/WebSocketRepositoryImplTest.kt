@@ -16,7 +16,7 @@ class WebSocketRepositoryImplTest {
 
     @Before
     fun setup() {
-        // Mock Android Log
+        
         mockkStatic(Log::class)
         every { Log.d(any(), any()) } returns 0
         every { Log.e(any(), any()) } returns 0

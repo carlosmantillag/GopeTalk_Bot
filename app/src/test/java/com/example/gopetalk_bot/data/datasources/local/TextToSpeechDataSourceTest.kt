@@ -41,7 +41,7 @@ class TextToSpeechDataSourceTest {
     fun `init should initialize TTS successfully and set language`() {
         dataSource = TextToSpeechDataSource(mockContext, onInitErrorCallback, mockTtsFactory)
         
-        // Simular inicialización exitosa
+        
         initCallbackSlot.captured.invoke(TextToSpeech.SUCCESS)
 
         assertThat(dataSource.isInitialized()).isTrue()
@@ -53,7 +53,7 @@ class TextToSpeechDataSourceTest {
     fun `init should call onInitError when TTS initialization fails`() {
         dataSource = TextToSpeechDataSource(mockContext, onInitErrorCallback, mockTtsFactory)
         
-        // Simular fallo en inicialización
+        
         initCallbackSlot.captured.invoke(TextToSpeech.ERROR)
 
         assertThat(dataSource.isInitialized()).isFalse()
@@ -86,16 +86,16 @@ class TextToSpeechDataSourceTest {
         
         dataSource = TextToSpeechDataSource(mockContext, onInitErrorCallback, mockTtsFactory)
         
-        // Hablar antes de inicializar
+        
         dataSource.speak("Pending text", "utterance-1")
         
-        // No debe llamar a TTS aún
+        
         verify(exactly = 0) { mockTtsEngine.speak(any(), any(), any(), any()) }
         
-        // Inicializar
+        
         initCallbackSlot.captured.invoke(TextToSpeech.SUCCESS)
         
-        // Ahora debe hablar el texto pendiente
+        
         verify { mockTtsEngine.speak("Pending text", TextToSpeech.QUEUE_ADD, any(), "utterance-1") }
     }
 
@@ -105,15 +105,15 @@ class TextToSpeechDataSourceTest {
         
         dataSource = TextToSpeechDataSource(mockContext, onInitErrorCallback, mockTtsFactory)
         
-        // Agregar múltiples textos pendientes
+        
         dataSource.speak("Text 1", "utterance-1")
         dataSource.speak("Text 2", "utterance-2")
         dataSource.speak("Text 3", "utterance-3")
         
-        // Inicializar
+        
         initCallbackSlot.captured.invoke(TextToSpeech.SUCCESS)
         
-        // Verificar que todos los textos se hablaron
+        
         verify { mockTtsEngine.speak("Text 1", TextToSpeech.QUEUE_ADD, any(), "utterance-1") }
         verify { mockTtsEngine.speak("Text 2", TextToSpeech.QUEUE_ADD, any(), "utterance-2") }
         verify { mockTtsEngine.speak("Text 3", TextToSpeech.QUEUE_ADD, any(), "utterance-3") }
@@ -174,16 +174,16 @@ class TextToSpeechDataSourceTest {
         
         dataSource = TextToSpeechDataSource(mockContext, onInitErrorCallback, mockTtsFactory)
         
-        // Agregar texto pendiente
+        
         dataSource.speak("Pending", "utterance-1")
         
-        // Inicializar
+        
         initCallbackSlot.captured.invoke(TextToSpeech.SUCCESS)
         
-        // Agregar nuevo texto después de inicializar
+        
         dataSource.speak("New text", "utterance-2")
         
-        // Debe llamarse 2 veces: 1 del pendiente + 1 del nuevo
+        
         verify(exactly = 2) { mockTtsEngine.speak(any(), any(), any(), any()) }
     }
 }

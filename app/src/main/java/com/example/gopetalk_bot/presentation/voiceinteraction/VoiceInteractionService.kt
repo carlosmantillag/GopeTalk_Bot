@@ -70,12 +70,12 @@ class VoiceInteractionService : Service(), VoiceInteractionContract.View {
         val userPreferences = UserPreferences(this)
         userPreferences.clearSession()
         
-        // Navegar de vuelta a la pantalla de autenticación
+        
         val intent = Intent(this, AuthenticationActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         
-        // Detener el servicio
+        
         stopSelf()
     }
 

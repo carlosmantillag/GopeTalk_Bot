@@ -48,7 +48,7 @@ class StartAudioMonitoringUseCaseTest {
 
     @Test
     fun `execute should not throw exception`() {
-        // Should complete without throwing
+        
         useCase.execute()
         
         verify { audioRepository.startMonitoring() }

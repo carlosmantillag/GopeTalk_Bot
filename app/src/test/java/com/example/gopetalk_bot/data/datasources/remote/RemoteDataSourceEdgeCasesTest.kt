@@ -9,10 +9,7 @@ import org.junit.Test
 import java.io.File
 import java.io.IOException
 
-/**
- * Tests adicionales para aumentar cobertura de RemoteDataSource
- * Enfocados en casos edge y escenarios específicos
- */
+
 class RemoteDataSourceEdgeCasesTest {
 
     private lateinit var dataSource: RemoteDataSource
@@ -24,12 +21,12 @@ class RemoteDataSourceEdgeCasesTest {
         mockMainThreadExecutor = mockk(relaxed = true)
         mockBase64Decoder = mockk(relaxed = true)
         
-        // Mock para ejecutar inmediatamente
+        
         every { mockMainThreadExecutor.post(any()) } answers {
             firstArg<Runnable>().run()
         }
         
-        // Mock para Base64
+        
         every { mockBase64Decoder.decode(any(), any()) } returns ByteArray(100)
         
         dataSource = RemoteDataSource(mockMainThreadExecutor, mockBase64Decoder)
@@ -40,7 +37,7 @@ class RemoteDataSourceEdgeCasesTest {
         unmockkAll()
     }
 
-    // ==================== Tests de ApiCallback ====================
+    
 
     @Test
     fun `ApiCallback should handle success with all parameters`() {
@@ -87,13 +84,13 @@ class RemoteDataSourceEdgeCasesTest {
         verify { callback.onFailure(match { it.cause == rootCause }) }
     }
 
-    // ==================== Tests de AudioDownloadCallback ====================
+    
 
     @Test
     fun `AudioDownloadCallback should handle success with large files`() {
         val callback = mockk<RemoteDataSource.AudioDownloadCallback>(relaxed = true)
         val mockFile = mockk<File>()
-        every { mockFile.length() } returns 10_000_000L // 10MB
+        every { mockFile.length() } returns 10_000_000L 
         
         callback.onSuccess(mockFile)
         
@@ -126,7 +123,7 @@ class RemoteDataSourceEdgeCasesTest {
         verify { callback.onSuccess(file3) }
     }
 
-    // ==================== Tests de AuthCallback ====================
+    
 
     @Test
     fun `AuthCallback should handle success with JWT token`() {
@@ -171,7 +168,7 @@ class RemoteDataSourceEdgeCasesTest {
         verify { callback.onSuccess(200, "OK", specialToken) }
     }
 
-    // ==================== Tests de AudioPollCallback ====================
+    
 
     @Test
     fun `AudioPollCallback should handle onAudioReceived with metadata`() {
@@ -224,7 +221,7 @@ class RemoteDataSourceEdgeCasesTest {
         verify { callback.onAudioReceived(mockFile, longUser, longChannel) }
     }
 
-    // ==================== Tests de AuthenticationException ====================
+    
 
     @Test
     fun `AuthenticationException should handle 400 Bad Request`() {
@@ -262,7 +259,7 @@ class RemoteDataSourceEdgeCasesTest {
         assertThat(exception.statusCode).isEqualTo(503)
     }
 
-    // ==================== Tests de MainThreadExecutor ====================
+    
 
     @Test
     fun `MainThreadExecutor should handle runnable that throws exception`() {
@@ -297,7 +294,7 @@ class RemoteDataSourceEdgeCasesTest {
         assertThat(executed).isTrue()
     }
 
-    // ==================== Tests de Base64Decoder ====================
+    
 
     @Test
     fun `Base64Decoder should handle URL_SAFE flag`() {
@@ -342,7 +339,7 @@ class RemoteDataSourceEdgeCasesTest {
         }
     }
 
-    // ==================== Tests de callbacks concurrentes ====================
+    
 
     @Test
     fun `multiple callbacks of different types should work independently`() {
@@ -373,7 +370,7 @@ class RemoteDataSourceEdgeCasesTest {
         verify(exactly = 100) { callback.onSuccess(any(), any(), any()) }
     }
 
-    // ==================== Tests de casos edge adicionales ====================
+    
 
     @Test
     fun `AuthenticationException with zero status code should work`() {

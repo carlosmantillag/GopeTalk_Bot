@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity(), MainContract.View {
 
         presenter = ServiceLocator.provideMainPresenter(this)
 
-        // Check permissions and start voice service
+        
         presenter.onViewCreated()
 
         setContent {
@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity(), MainContract.View {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Stop the voice interaction service when the app is closed
+        
         stopService(Intent(this, VoiceInteractionService::class.java))
     }
 }

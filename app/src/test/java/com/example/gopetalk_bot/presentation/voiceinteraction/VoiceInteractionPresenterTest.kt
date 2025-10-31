@@ -63,7 +63,7 @@ class VoiceInteractionPresenterTest {
         Dispatchers.setMain(testDispatcher)
         AudioRmsMonitor.reset()
 
-        // Mock Handler para ejecutar inmediatamente
+        
         mockHandler = mockk<Handler>(relaxed = true)
         every { mockHandler.post(any()) } answers {
             firstArg<Runnable>().run()
@@ -879,7 +879,7 @@ class VoiceInteractionPresenterTest {
         presenter.start()
         pumpTasks()
 
-        // El comportamiento puede variar - verificar que no se llame con texto vacío
+        
         verify(exactly = 0) { speakTextUseCase.execute("", any()) }
     }
 }

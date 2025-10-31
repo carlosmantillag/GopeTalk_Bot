@@ -9,9 +9,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Tests adicionales para aumentar branch coverage en WebSocketRepositoryImpl
- */
+
 class WebSocketRepositoryImplEdgeCasesTest {
 
     private lateinit var webSocketDataSource: WebSocketDataSource
@@ -36,7 +34,7 @@ class WebSocketRepositoryImplEdgeCasesTest {
         clearAllMocks()
     }
 
-    // ==================== Connect Edge Cases ====================
+    
 
     @Test
     fun `connect with null authToken should work`() {
@@ -119,7 +117,7 @@ class WebSocketRepositoryImplEdgeCasesTest {
         }
     }
 
-    // ==================== Listener Propagation Edge Cases ====================
+    
 
     @Test
     fun `all listener events should be propagated correctly`() {
@@ -148,7 +146,7 @@ class WebSocketRepositoryImplEdgeCasesTest {
 
         repository.connect("ws://test.com", "token", "channel", listener)
 
-        // Trigger all events
+        
         callbackSlot.captured.onMicrophoneStart()
         callbackSlot.captured.onMicrophoneStop()
         callbackSlot.captured.onConnectionEstablished()
@@ -210,7 +208,7 @@ class WebSocketRepositoryImplEdgeCasesTest {
         assertThat(errorMessage).isEqualTo(longError)
     }
 
-    // ==================== UpdateChannel Edge Cases ====================
+    
 
     @Test
     fun `updateChannel with null authToken should work`() {
@@ -259,7 +257,7 @@ class WebSocketRepositoryImplEdgeCasesTest {
         verify(exactly = 1) { webSocketDataSource.updateChannel("token3", "channel3") }
     }
 
-    // ==================== Disconnect Edge Cases ====================
+    
 
     @Test
     fun `disconnect should call datasource`() {
@@ -279,13 +277,13 @@ class WebSocketRepositoryImplEdgeCasesTest {
 
     @Test
     fun `disconnect without connect should work`() {
-        // Should not throw exception
+        
         repository.disconnect()
 
         verify { webSocketDataSource.disconnect() }
     }
 
-    // ==================== IsConnected Edge Cases ====================
+    
 
     @Test
     fun `isConnected should return true when connected`() {
@@ -316,7 +314,7 @@ class WebSocketRepositoryImplEdgeCasesTest {
         verify(exactly = 3) { webSocketDataSource.isConnected() }
     }
 
-    // ==================== Complex Scenarios ====================
+    
 
     @Test
     fun `connect then disconnect then connect again should work`() {
@@ -379,7 +377,7 @@ class WebSocketRepositoryImplEdgeCasesTest {
 
         repository.connect("ws://test.com", "token", "channel", listener)
 
-        // Trigger events multiple times
+        
         callbackSlot.captured.onMicrophoneStart()
         callbackSlot.captured.onMicrophoneStart()
         callbackSlot.captured.onMicrophoneStop()

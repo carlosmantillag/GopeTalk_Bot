@@ -31,7 +31,7 @@ class AudioDataSourceTest {
 
     @Before
     fun setup() {
-        // Limpiar mocks anteriores
+        
         clearAllMocks()
         mockkStatic(Log::class)
         every { Log.d(any<String>(), any<String>()) } returns 0
@@ -47,11 +47,11 @@ class AudioDataSourceTest {
         mockAdaptiveThresholdManager = mockk(relaxed = true)
         mockVoiceActivityDetector = mockk(relaxed = true)
         
-        // Mock cache directory
+        
         tempCacheDir = Files.createTempDirectory("audio_cache_test").toFile()
         every { mockContext.cacheDir } returns tempCacheDir
         
-        // Mock buffer size
+        
         every { mockBufferProvider.getMinBufferSize(any(), any(), any()) } returns 4096
         
         every { mockAdaptiveThresholdManager.processAudioLevel(any(), any()) } just Runs
@@ -95,10 +95,10 @@ class AudioDataSourceTest {
 
     @Test
     fun `pauseRecording should set paused state`() {
-        // No podemos verificar el estado directamente, pero podemos verificar que no lanza excepciones
+        
         dataSource.pauseRecording()
         
-        // Si llega aquí, la función se ejecutó sin errores
+        
         assertThat(true).isTrue()
     }
 
@@ -107,13 +107,13 @@ class AudioDataSourceTest {
         dataSource.pauseRecording()
         dataSource.resumeRecording()
         
-        // Si llega aquí, la función se ejecutó sin errores
+        
         assertThat(true).isTrue()
     }
 
     @Test
     fun `stopMonitoring should handle not monitoring state`() {
-        // Llamar stopMonitoring cuando no está monitoreando no debe lanzar excepción
+        
         dataSource.stopMonitoring()
         
         assertThat(true).isTrue()
@@ -121,7 +121,7 @@ class AudioDataSourceTest {
 
     @Test
     fun `release should call stopMonitoring if monitoring`() {
-        // Llamar release cuando no está monitoreando no debe lanzar excepción
+        
         dataSource.release()
         
         assertThat(true).isTrue()
@@ -283,7 +283,7 @@ class AudioDataSourceTest {
         assertThat(recordedAudio1.hashCode()).isEqualTo(recordedAudio2.hashCode())
     }
 
-    // ==================== Tests para AudioBufferProvider ====================
+    
     
     @Test
     fun `AudioBufferProvider should return buffer size`() {
@@ -294,21 +294,21 @@ class AudioDataSourceTest {
 
     @Test
     fun `AndroidAudioBufferProvider should delegate to AudioRecord`() {
-        // Este test verifica que la implementación real delega correctamente
-        // No podemos ejecutar AudioRecord.getMinBufferSize en tests unitarios sin Robolectric
-        // pero podemos verificar que la clase existe y tiene el método correcto
+        
+        
+        
         val provider = AndroidAudioBufferProvider()
         assertThat(provider).isNotNull()
     }
 
-    // ==================== Tests para cálculo de RMS ====================
+    
     
     @Test
     fun `calculateRmsDb with silence should return low value`() {
-        // Creamos audio silencioso (todos ceros)
+        
         val silentData = ByteArray(4096) { 0 }
         
-        // Usamos reflection para acceder al método privado
+        
         val method = AudioDataSource::class.java.getDeclaredMethod(
             "calculateRmsDb",
             ByteArray::class.java,
@@ -318,19 +318,19 @@ class AudioDataSourceTest {
         
         val rmsDb = method.invoke(dataSource, silentData, silentData.size) as Float
         
-        // El silencio debería dar un valor muy bajo (cerca de 0 o negativo)
+        
         assertThat(rmsDb).isLessThan(50f)
     }
 
     @Test
     fun `calculateRmsDb with loud audio should return high value`() {
-        // Creamos audio fuerte (valores altos)
+        
         val loudData = ByteArray(4096)
         val buffer = ByteBuffer.wrap(loudData).order(ByteOrder.LITTLE_ENDIAN)
         
-        // Llenamos con valores de 16 bits altos (simulando audio fuerte)
+        
         for (i in 0 until loudData.size / 2) {
-            buffer.putShort(10000) // Valor alto pero no máximo
+            buffer.putShort(10000) 
         }
         
         val method = AudioDataSource::class.java.getDeclaredMethod(
@@ -342,7 +342,7 @@ class AudioDataSourceTest {
         
         val rmsDb = method.invoke(dataSource, loudData, loudData.size) as Float
         
-        // Audio fuerte debería dar un valor alto
+        
         assertThat(rmsDb).isGreaterThan(70f)
     }
 
@@ -351,7 +351,7 @@ class AudioDataSourceTest {
         val mediumData = ByteArray(4096)
         val buffer = ByteBuffer.wrap(mediumData).order(ByteOrder.LITTLE_ENDIAN)
         
-        // Valores medios
+        
         for (i in 0 until mediumData.size / 2) {
             buffer.putShort(1000)
         }
@@ -374,7 +374,7 @@ class AudioDataSourceTest {
         val varyingData = ByteArray(4096)
         val buffer = ByteBuffer.wrap(varyingData).order(ByteOrder.LITTLE_ENDIAN)
         
-        // Valores variados
+        
         for (i in 0 until varyingData.size / 2) {
             buffer.putShort((i % 5000).toShort())
         }
@@ -388,12 +388,12 @@ class AudioDataSourceTest {
         
         val rmsDb = method.invoke(dataSource, varyingData, varyingData.size) as Float
         
-        // Debería retornar un valor válido
+        
         assertThat(rmsDb).isNotNaN()
         assertThat(rmsDb).isFinite()
     }
 
-    // ==================== Tests para detección de sonido/silencio ====================
+    
     
     @Test
     fun `isSoundDetected should return true when rmsDb above threshold`() {
@@ -434,7 +434,7 @@ class AudioDataSourceTest {
         assertThat(result).isFalse()
     }
 
-    // ==================== Tests para generación de headers WAV ====================
+    
     
     @Test
     fun `createWavHeader should generate correct header size`() {
@@ -463,7 +463,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Verificar "RIFF" en los primeros 4 bytes
+        
         assertThat(header[0]).isEqualTo('R'.code.toByte())
         assertThat(header[1]).isEqualTo('I'.code.toByte())
         assertThat(header[2]).isEqualTo('F'.code.toByte())
@@ -482,7 +482,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Verificar "WAVE" en bytes 8-11
+        
         assertThat(header[8]).isEqualTo('W'.code.toByte())
         assertThat(header[9]).isEqualTo('A'.code.toByte())
         assertThat(header[10]).isEqualTo('V'.code.toByte())
@@ -501,7 +501,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Verificar "fmt " en bytes 12-15
+        
         assertThat(header[12]).isEqualTo('f'.code.toByte())
         assertThat(header[13]).isEqualTo('m'.code.toByte())
         assertThat(header[14]).isEqualTo('t'.code.toByte())
@@ -520,7 +520,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Verificar "data" en bytes 36-39
+        
         assertThat(header[36]).isEqualTo('d'.code.toByte())
         assertThat(header[37]).isEqualTo('a'.code.toByte())
         assertThat(header[38]).isEqualTo('t'.code.toByte())
@@ -539,7 +539,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Byte 20-21 debe ser 1 (PCM format)
+        
         assertThat(header[20]).isEqualTo(1.toByte())
         assertThat(header[21]).isEqualTo(0.toByte())
     }
@@ -556,7 +556,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Byte 22-23 debe ser 1 (mono)
+        
         assertThat(header[22]).isEqualTo(1.toByte())
         assertThat(header[23]).isEqualTo(0.toByte())
     }
@@ -573,7 +573,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Bytes 24-27 contienen el sample rate (16000 Hz en little endian)
+        
         val sampleRate = ByteBuffer.wrap(header, 24, 4).order(ByteOrder.LITTLE_ENDIAN).int
         assertThat(sampleRate).isEqualTo(16000)
     }
@@ -590,7 +590,7 @@ class AudioDataSourceTest {
         
         val header = method.invoke(dataSource, 1000, 1000, 32000L) as ByteArray
         
-        // Bytes 34-35 contienen bits per sample (16 bits)
+        
         assertThat(header[34]).isEqualTo(16.toByte())
         assertThat(header[35]).isEqualTo(0.toByte())
     }
@@ -609,7 +609,7 @@ class AudioDataSourceTest {
         val totalDataLen = totalAudioLen + 36
         val header = method.invoke(dataSource, totalDataLen, totalAudioLen, 32000L) as ByteArray
         
-        // Bytes 4-7 contienen el tamaño del archivo (totalDataLen)
+        
         val fileSize = ByteBuffer.wrap(header, 4, 4).order(ByteOrder.LITTLE_ENDIAN).int
         assertThat(fileSize).isEqualTo(totalDataLen)
     }
@@ -627,12 +627,12 @@ class AudioDataSourceTest {
         val totalAudioLen = 1000
         val header = method.invoke(dataSource, 1036, totalAudioLen, 32000L) as ByteArray
         
-        // Bytes 40-43 contienen el tamaño del data chunk
+        
         val dataSize = ByteBuffer.wrap(header, 40, 4).order(ByteOrder.LITTLE_ENDIAN).int
         assertThat(dataSize).isEqualTo(totalAudioLen)
     }
 
-    // ==================== Tests para writeRiffHeader ====================
+    
     
     @Test
     fun `writeRiffHeader should write RIFF correctly`() {
@@ -683,14 +683,14 @@ class AudioDataSourceTest {
         val totalDataLen = 0x12345678
         method.invoke(dataSource, header, totalDataLen)
         
-        // Verificar que los bytes 4-7 contienen el tamaño en little endian
+        
         assertThat(header[4]).isEqualTo(0x78.toByte())
         assertThat(header[5]).isEqualTo(0x56.toByte())
         assertThat(header[6]).isEqualTo(0x34.toByte())
         assertThat(header[7]).isEqualTo(0x12.toByte())
     }
 
-    // ==================== Tests para writeFmtChunk ====================
+    
     
     @Test
     fun `writeFmtChunk should write fmt identifier`() {
@@ -722,7 +722,7 @@ class AudioDataSourceTest {
         
         method.invoke(dataSource, header, 32000L)
         
-        // Bytes 16-19 deben ser 16 (tamaño del fmt chunk)
+        
         assertThat(header[16]).isEqualTo(16.toByte())
         assertThat(header[17]).isEqualTo(0.toByte())
         assertThat(header[18]).isEqualTo(0.toByte())
@@ -741,7 +741,7 @@ class AudioDataSourceTest {
         
         method.invoke(dataSource, header, 32000L)
         
-        // Bytes 20-21 deben ser 1 (PCM)
+        
         assertThat(header[20]).isEqualTo(1.toByte())
         assertThat(header[21]).isEqualTo(0.toByte())
     }
@@ -758,7 +758,7 @@ class AudioDataSourceTest {
         
         method.invoke(dataSource, header, 32000L)
         
-        // Bytes 22-23 deben ser 1 (mono)
+        
         assertThat(header[22]).isEqualTo(1.toByte())
         assertThat(header[23]).isEqualTo(0.toByte())
     }
@@ -776,12 +776,12 @@ class AudioDataSourceTest {
         val byteRate = 32000L
         method.invoke(dataSource, header, byteRate)
         
-        // Bytes 28-31 contienen el byte rate
+        
         val readByteRate = ByteBuffer.wrap(header, 28, 4).order(ByteOrder.LITTLE_ENDIAN).int
         assertThat(readByteRate).isEqualTo(byteRate.toInt())
     }
 
-    // ==================== Tests para writeDataChunk ====================
+    
     
     @Test
     fun `writeDataChunk should write data identifier`() {
@@ -814,14 +814,14 @@ class AudioDataSourceTest {
         val dataSize = 0x12345678
         method.invoke(dataSource, header, dataSize)
         
-        // Bytes 40-43 contienen el tamaño en little endian
+        
         assertThat(header[40]).isEqualTo(0x78.toByte())
         assertThat(header[41]).isEqualTo(0x56.toByte())
         assertThat(header[42]).isEqualTo(0x34.toByte())
         assertThat(header[43]).isEqualTo(0x12.toByte())
     }
 
-    // ==================== Tests de integración ====================
+    
     
     @Test
     fun `complete WAV header should be valid`() {
@@ -833,29 +833,29 @@ class AudioDataSourceTest {
         )
         method.isAccessible = true
         
-        val totalAudioLen = 16000 // 1 segundo de audio a 16kHz mono 16-bit
+        val totalAudioLen = 16000 
         val totalDataLen = totalAudioLen + 36
-        val byteRate = 32000L // 16000 Hz * 16 bits * 1 channel / 8
+        val byteRate = 32000L 
         
         val header = method.invoke(dataSource, totalDataLen, totalAudioLen, byteRate) as ByteArray
         
-        // Verificar estructura completa
+        
         assertThat(header.size).isEqualTo(44)
         
-        // RIFF header
+        
         assertThat(String(header, 0, 4)).isEqualTo("RIFF")
         assertThat(String(header, 8, 4)).isEqualTo("WAVE")
         
-        // fmt chunk
+        
         assertThat(String(header, 12, 4)).isEqualTo("fmt ")
         
-        // data chunk
+        
         assertThat(String(header, 36, 4)).isEqualTo("data")
     }
 
     @Test
     fun `buffer provider should return valid buffer size`() {
-        // Verificar que el buffer provider retorna un valor válido cuando se llama
+        
         val bufferSize = mockBufferProvider.getMinBufferSize(
             16000, 
             AudioFormat.CHANNEL_IN_MONO, 
@@ -868,22 +868,22 @@ class AudioDataSourceTest {
 
     @Test
     fun `AudioDataSource should be properly initialized with context and buffer provider`() {
-        // Verificar que el AudioDataSource se inicializa correctamente
+        
         assertThat(dataSource).isNotNull()
         
-        // Verificar que el buffer provider retorna un valor válido
+        
         val bufferSize = mockBufferProvider.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         assertThat(bufferSize).isGreaterThan(0)
     }
 
-    // ==================== Tests para isSilenceDetected ====================
+    
     
     @Test
     fun `isSilenceDetected should return false immediately after sound`() {
         val method = AudioDataSource::class.java.getDeclaredMethod("isSilenceDetected")
         method.isAccessible = true
         
-        // Establecer lastSoundTime a ahora
+        
         val lastSoundTimeField = AudioDataSource::class.java.getDeclaredField("lastSoundTime")
         lastSoundTimeField.isAccessible = true
         lastSoundTimeField.set(dataSource, System.currentTimeMillis())
@@ -898,7 +898,7 @@ class AudioDataSourceTest {
         val method = AudioDataSource::class.java.getDeclaredMethod("isSilenceDetected")
         method.isAccessible = true
         
-        // Establecer lastSoundTime a hace 3 segundos (más que SILENCE_TIMEOUT_MS = 2000)
+        
         val lastSoundTimeField = AudioDataSource::class.java.getDeclaredField("lastSoundTime")
         lastSoundTimeField.isAccessible = true
         lastSoundTimeField.set(dataSource, System.currentTimeMillis() - 3000)
@@ -913,7 +913,7 @@ class AudioDataSourceTest {
         val method = AudioDataSource::class.java.getDeclaredMethod("isSilenceDetected")
         method.isAccessible = true
         
-        // Establecer lastSoundTime a hace 1.5 segundos (menos que SILENCE_TIMEOUT_MS = 2000)
+        
         val lastSoundTimeField = AudioDataSource::class.java.getDeclaredField("lastSoundTime")
         lastSoundTimeField.isAccessible = true
         lastSoundTimeField.set(dataSource, System.currentTimeMillis() - 1500)
@@ -928,7 +928,7 @@ class AudioDataSourceTest {
         val method = AudioDataSource::class.java.getDeclaredMethod("isSilenceDetected")
         method.isAccessible = true
         
-        // Establecer lastSoundTime a hace exactamente 2001ms
+        
         val lastSoundTimeField = AudioDataSource::class.java.getDeclaredField("lastSoundTime")
         lastSoundTimeField.isAccessible = true
         lastSoundTimeField.set(dataSource, System.currentTimeMillis() - 2001)
@@ -938,22 +938,22 @@ class AudioDataSourceTest {
         assertThat(result).isTrue()
     }
 
-    // ==================== Tests para startNewRecording ====================
+    
     
     @Test
     fun `startNewRecording should set isRecording flag`() {
         val isRecordingField = AudioDataSource::class.java.getDeclaredField("isRecording")
         isRecordingField.isAccessible = true
         
-        // Verificar que inicialmente es false
+        
         assertThat(isRecordingField.get(dataSource) as Boolean).isFalse()
         
-        // startNewRecording requiere acceso al sistema de archivos, 
-        // por lo que solo verificamos el estado inicial
+        
+        
         assertThat(true).isTrue()
     }
 
-    // ==================== Tests para stopRecordingAndFinalize ====================
+    
     
     @Test
     fun `stopRecordingAndFinalize should set isRecording to false`() {
@@ -1034,7 +1034,7 @@ class AudioDataSourceTest {
 
     @Test
     fun `stopRecordingAndFinalize should call onRecordingStopped when bytes read`() {
-        // Crear un archivo temporal real para este test
+        
         val tempFile = File.createTempFile("test_audio", ".wav")
         tempFile.deleteOnExit()
         
@@ -1063,7 +1063,7 @@ class AudioDataSourceTest {
         tempFile.delete()
     }
 
-    // ==================== Tests para cleanupAudioRecord ====================
+    
     
     @Test
     fun `cleanupAudioRecord should set audioRecord to null`() {
@@ -1073,7 +1073,7 @@ class AudioDataSourceTest {
         val audioRecordField = AudioDataSource::class.java.getDeclaredField("audioRecord")
         audioRecordField.isAccessible = true
         
-        // Establecer un mock de AudioRecord
+        
         val mockAudioRecord = mockk<AudioRecord>(relaxed = true)
         audioRecordField.set(dataSource, mockAudioRecord)
         
@@ -1115,7 +1115,7 @@ class AudioDataSourceTest {
         assertThat(recordingThreadField.get(dataSource)).isNull()
     }
 
-    // ==================== Tests para processAudioData ====================
+    
     
     @Test
     fun `processAudioData should update lastSoundTime when sound detected`() {
@@ -1138,7 +1138,7 @@ class AudioDataSourceTest {
         val initialTime = 0L
         lastSoundTimeField.set(dataSource, initialTime)
         
-        // Establecer isRecording a true para evitar llamar startNewRecording
+        
         val isRecordingField = AudioDataSource::class.java.getDeclaredField("isRecording")
         isRecordingField.isAccessible = true
         isRecordingField.set(dataSource, true)
@@ -1147,7 +1147,7 @@ class AudioDataSourceTest {
         every { mockFos.write(any<ByteArray>(), any(), any()) } just Runs
         
         val data = ByteArray(100)
-        val rmsDb = 75f // Por encima del threshold
+        val rmsDb = 75f 
         val onRecordingStopped: (AudioDataSource.RecordedAudioData) -> Unit = {}
         val onError: (String, Throwable?) -> Unit = { _, _ -> }
         
@@ -1177,7 +1177,7 @@ class AudioDataSourceTest {
         lastSoundTimeField.set(dataSource, initialTime)
         
         val data = ByteArray(100)
-        val rmsDb = 60f // Por debajo del threshold
+        val rmsDb = 60f 
         val onRecordingStopped: (AudioDataSource.RecordedAudioData) -> Unit = {}
         val onError: (String, Throwable?) -> Unit = { _, _ -> }
         
@@ -1223,7 +1223,7 @@ class AudioDataSourceTest {
         assertThat(result.second as Int).isEqualTo(initialBytes + 100)
     }
 
-    // ==================== Tests para edge cases ====================
+    
     
     @Test
     fun `calculateRmsDb should handle empty data`() {
@@ -1296,7 +1296,7 @@ class AudioDataSourceTest {
         )
         method.isAccessible = true
         
-        // Test con diferentes tamaños
+        
         val sizes = listOf(100, 1000, 10000, 100000)
         
         sizes.forEach { size ->
@@ -1321,7 +1321,7 @@ class AudioDataSourceTest {
         recordingThreadField.isAccessible = true
         recordingThreadField.set(dataSource, mockThread)
         
-        // No debería lanzar excepción
+        
         dataSource.stopMonitoring()
         
         assertThat(isMonitoringField.get(dataSource) as Boolean).isFalse()
@@ -1333,7 +1333,7 @@ class AudioDataSourceTest {
         isMonitoringField.isAccessible = true
         isMonitoringField.set(dataSource, false)
         
-        // No debería lanzar excepción
+        
         dataSource.release()
         
         assertThat(true).isTrue()

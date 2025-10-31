@@ -45,9 +45,7 @@ import com.example.gopetalk_bot.presentation.main.MainPresenter
 import com.example.gopetalk_bot.presentation.voiceinteraction.VoiceInteractionContract
 import com.example.gopetalk_bot.presentation.voiceinteraction.VoiceInteractionPresenter
 
-/**
- * Simple service locator that wires the production graph without affecting runtime behaviour.
- */
+
 object ServiceLocator {
 
     fun provideAuthenticationPresenter(view: AuthenticationContract.View): AuthenticationContract.Presenter {

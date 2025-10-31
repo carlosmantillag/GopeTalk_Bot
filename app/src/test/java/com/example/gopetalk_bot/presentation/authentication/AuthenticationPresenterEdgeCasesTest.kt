@@ -13,10 +13,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Tests adicionales para aumentar cobertura de branch y line
- * en AuthenticationPresenter
- */
+
 class AuthenticationPresenterEdgeCasesTest {
 
     private lateinit var presenter: AuthenticationPresenter
@@ -84,7 +81,7 @@ class AuthenticationPresenterEdgeCasesTest {
         unmockkAll()
     }
 
-    // ==================== Edge Cases for PIN Validation ====================
+    
 
     @Test
     fun `handlePinInput should accept 4-digit PIN with leading zeros`() {
@@ -250,7 +247,7 @@ class AuthenticationPresenterEdgeCasesTest {
         }
     }
 
-    // ==================== Number Conversion Edge Cases ====================
+    
 
     @Test
     fun `convertWordsToNumbers should handle mixed Spanish and digits`() {
@@ -304,13 +301,13 @@ class AuthenticationPresenterEdgeCasesTest {
         }
     }
 
-    // Test comentado - demasiado complejo para el scope actual
-    // @Test
-    // fun `convertWordsToNumbers should handle all Spanish numbers 0-9`() {
-    //     // Test complejo que valida todos los números en español
-    // }
+    
+    
+    
+    
+    
 
-    // ==================== PIN Confirmation Edge Cases ====================
+    
 
     @Test
     fun `handlePinConfirmation should accept 'si' without accent`() {
@@ -431,13 +428,13 @@ class AuthenticationPresenterEdgeCasesTest {
         verify { speakTextUseCase.execute(match { it.contains("entendí") }, "auth_unclear") }
     }
 
-    // ==================== Authentication Response Edge Cases ====================
+    
 
-    // Test comentado - requiere validación de JSON parsing específica
-    // @Test
-    // fun `authentication should handle response with missing token`() {
-    //     // Test que valida manejo de JSON inválido
-    // }
+    
+    
+    
+    
+    
 
     @Test
     fun `authentication should handle empty response body`() {
@@ -470,7 +467,7 @@ class AuthenticationPresenterEdgeCasesTest {
         verify { view.logError(match { it.contains("Error parsing") }, any()) }
     }
 
-    // ==================== Speech Error Edge Cases ====================
+    
 
     @Test
     fun `speech error with 'No speech' should retry`() {
@@ -512,7 +509,7 @@ class AuthenticationPresenterEdgeCasesTest {
         verify { speakTextUseCase.execute(match { it.contains("repite") }, "auth_error") }
     }
 
-    // ==================== Lifecycle Edge Cases ====================
+    
 
     @Test
     fun `multiple start calls should be idempotent`() {
@@ -546,11 +543,11 @@ class AuthenticationPresenterEdgeCasesTest {
         verify { view.requestPermissions(permissions.toTypedArray()) }
     }
 
-    // ==================== Constants Validation ====================
+    
 
     @Test
     fun `presenter constants should be properly defined`() {
-        // Validate that constants are used correctly by testing behavior
+        
         presenter.start()
         
         verify { speakTextUseCase.execute(match { it.contains("nombre") }, "auth_ask_name") }

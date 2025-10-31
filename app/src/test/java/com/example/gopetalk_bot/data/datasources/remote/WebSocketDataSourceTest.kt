@@ -32,7 +32,7 @@ class WebSocketDataSourceTest {
             mockOkHttpClient.newWebSocket(any<Request>(), capture(webSocketListenerSlot))
         } returns mockWebSocket
 
-        // Inyectar el mock del cliente
+        
         dataSource = WebSocketDataSource(mockOkHttpClient)
     }
 
@@ -266,13 +266,13 @@ class WebSocketDataSourceTest {
     fun `updateChannel should send update when connected`() {
         dataSource.connect("ws://test.com", "token123", "oldChannel", listener)
         
-        // Simular que la conexión se estableció
+        
         val mockResponse = mockk<Response>(relaxed = true)
         webSocketListenerSlot.captured.onOpen(mockWebSocket, mockResponse)
         
         dataSource.updateChannel("newToken", "newChannel")
 
-        // Verificar que se llamó send al menos 2 veces (handshake inicial + update)
+        
         verify(atLeast = 2) { mockWebSocket.send(any<String>()) }
     }
 

@@ -13,9 +13,7 @@ import org.junit.Test
 import java.io.File
 import java.io.IOException
 
-/**
- * Tests adicionales para aumentar branch coverage en ApiRepositoryImpl
- */
+
 class ApiRepositoryImplEdgeCasesTest {
 
     private lateinit var remoteDataSource: RemoteDataSource
@@ -35,7 +33,7 @@ class ApiRepositoryImplEdgeCasesTest {
         clearAllMocks()
     }
 
-    // ==================== sendAudioCommand Edge Cases ====================
+    
 
     @Test
     fun `sendAudioCommand should handle null auth token`() {
@@ -144,7 +142,7 @@ class ApiRepositoryImplEdgeCasesTest {
         assertThat(errorResponse.message).isEqualTo("Unknown error")
     }
 
-    // ==================== sendAuthentication Edge Cases ====================
+    
 
     @Test
     fun `sendAuthentication should format response body correctly`() {
@@ -250,7 +248,7 @@ class ApiRepositoryImplEdgeCasesTest {
         assertThat(errorResponse.message).isEqualTo("Unknown error")
     }
 
-    // ==================== pollAudio Edge Cases ====================
+    
 
     @Test
     fun `pollAudio should pass null auth token when not set`() {
