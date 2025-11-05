@@ -68,6 +68,10 @@ class VoiceInteractionPresenter(
         const val POLLING_INTERVAL_MS = 2000L
         const val WAITING_MESSAGE_DELAY_MS = 4000L
         const val WAITING_MESSAGE = "Trayendo tu respuesta, espera"
+        const val AUDIO_DURATION_LIMIT_MS = 60_000L
+        const val AUDIO_DURATION_LIMIT_MESSAGE = "Lo siento, límite de audio superado"
+        private const val WAV_HEADER_BYTES = 44
+        private const val PCM_16BIT_BYTES_PER_SAMPLE = 2
         const val STATUS_CODE_NO_CONTENT = 204
         const val SERVER_OUTAGE_STREAM_MESSAGE = "Estamos reiniciando el servicio de audio, vuelve a intentarlo en unos momentos."
         const val SERVER_OUTAGE_NETWORK_MESSAGE = "No pudimos conectar con el servidor, revisa tu conexión o inténtalo nuevamente más tarde."
@@ -113,6 +117,22 @@ class VoiceInteractionPresenter(
         }
     }
 
+    private fun isAudioDurationExceeded(audioData: AudioData): Boolean {
+        val durationMs = calculateAudioDurationMs(audioData)
+        return durationMs != null && durationMs > AUDIO_DURATION_LIMIT_MS
+    }
+
+    private fun calculateAudioDurationMs(audioData: AudioData): Long? {
+        if (!audioData.file.exists()) return null
+        val audioBytes = (audioData.file.length() - WAV_HEADER_BYTES).coerceAtLeast(0L)
+        val bytesPerSecond = when (audioData.format) {
+            com.example.gopetalk_bot.domain.entities.AudioFormat.PCM_16BIT ->
+                audioData.sampleRate * audioData.channels * PCM_16BIT_BYTES_PER_SAMPLE
+        }
+        if (bytesPerSecond <= 0) return null
+        return (audioBytes * 1000L) / bytesPerSecond
+    }
+
     private fun setupTtsListeners() {
         setTtsListenerUseCase.execute(
             onStart = { pauseAudioRecordingUseCase.execute() },
@@ -144,6 +164,13 @@ class VoiceInteractionPresenter(
     }
 
     private fun sendAudioToBackend(audioData: AudioData) {
+        if (isAudioDurationExceeded(audioData)) {
+            view.logInfo("Audio duration exceeded the limit, skipping send.")
+            cancelWaitingMessage()
+            audioData.file.delete()
+            speak(AUDIO_DURATION_LIMIT_MESSAGE)
+            return
+        }
         scheduleWaitingMessage()
         
         sendAudioCommandUseCase.execute(audioData) { response ->

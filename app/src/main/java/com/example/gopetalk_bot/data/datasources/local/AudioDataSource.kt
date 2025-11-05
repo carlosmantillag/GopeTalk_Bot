@@ -38,6 +38,7 @@ class AudioDataSource(
         const val BITS_PER_SAMPLE = 16
         const val CHANNELS = 1
         const val STATUS_LOG_INTERVAL = 50
+        const val MAX_RECORDING_DURATION_MS = 60_000L
     }
 
     private var audioRecord: AudioRecord? = null
@@ -49,6 +50,7 @@ class AudioDataSource(
     @Volatile private var isPaused = false
     @Volatile private var lastSoundTime = 0L
     @Volatile private var voiceConfirmed = false
+    @Volatile private var recordingStartTime = 0L
     private var sampleCount = 0
 
     private val bufferSize by lazy { 
@@ -178,6 +180,12 @@ class AudioDataSource(
             outputStream?.write(data, 0, read)
             bytesRead += read
 
+            if (hasExceededDurationLimit()) {
+                Log.d(TAG, "⏱️ Límite de duración alcanzado, finalizando grabación...")
+                stopRecordingAndFinalize(outputStream, bytesRead, onRecordingStopped, onError)
+                return Pair(null, 0)
+            }
+
             if (isSilenceDetected()) {
                 Log.d(TAG, "Silencio detectado, finalizando grabación...")
                 if (voiceConfirmed) {
@@ -216,6 +224,7 @@ class AudioDataSource(
         audioFile = File(context.cacheDir, AUDIO_FILENAME)
         val fos = FileOutputStream(audioFile)
         fos.write(ByteArray(WAV_HEADER_SIZE))
+        recordingStartTime = System.currentTimeMillis()
         return fos
     }
 
@@ -229,6 +238,7 @@ class AudioDataSource(
         voiceActivityDetector.reset()
         try {
             fos?.close()
+            recordingStartTime = 0L
             audioFile?.let { file ->
                 if (totalBytesRead > 0) {
                     writeWavHeader(file, totalBytesRead)
@@ -248,6 +258,7 @@ class AudioDataSource(
         voiceActivityDetector.reset()
         try {
             fos?.close()
+            recordingStartTime = 0L
             audioFile?.delete()
             audioFile = null
         } catch (e: IOException) {
@@ -360,6 +371,12 @@ class AudioDataSource(
                       "Ambiente: $environment (${String.format("%.1f", ambient)} dB) | " +
                       "Umbral: ${String.format("%.1f", threshold)} dB")
         }
+    }
+
+    private fun hasExceededDurationLimit(): Boolean {
+        if (recordingStartTime == 0L) return false
+        val elapsed = System.currentTimeMillis() - recordingStartTime
+        return elapsed >= MAX_RECORDING_DURATION_MS
     }
 
 }
