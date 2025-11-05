@@ -69,7 +69,7 @@ class VoiceInteractionPresenter(
         const val WAITING_MESSAGE_DELAY_MS = 4000L
         const val WAITING_MESSAGE = "Trayendo tu respuesta, espera"
         const val AUDIO_DURATION_LIMIT_MS = 60_000L
-        const val AUDIO_DURATION_LIMIT_MESSAGE = "Lo siento, límite de audio superado"
+        const val AUDIO_DURATION_LIMIT_MESSAGE = "límite de audio superado, enviando audio"
         private const val WAV_HEADER_BYTES = 44
         private const val PCM_16BIT_BYTES_PER_SAMPLE = 2
         const val STATUS_CODE_NO_CONTENT = 204
@@ -164,12 +164,11 @@ class VoiceInteractionPresenter(
     }
 
     private fun sendAudioToBackend(audioData: AudioData) {
-        if (isAudioDurationExceeded(audioData)) {
-            view.logInfo("Audio duration exceeded the limit, skipping send.")
-            cancelWaitingMessage()
-            audioData.file.delete()
+        val reachedDurationLimit = isAudioDurationExceeded(audioData)
+        if (reachedDurationLimit) {
+            view.logInfo("Audio duration reached the limit, sending trimmed audio segment.")
+            pauseAudioRecordingUseCase.execute()
             speak(AUDIO_DURATION_LIMIT_MESSAGE)
-            return
         }
         scheduleWaitingMessage()
         
